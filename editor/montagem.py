@@ -116,6 +116,11 @@ class Montagem:
     tirar_fundo_do_personagem: bool = True
     #: De onde vem o áudio: "fundo", "pessoa" ou "audio" (``None``: a regra automática).
     fala: str | None = None
+    #: A altura do personagem/pessoa na tela, de 0 a 1 (``None``: a padrão, 0,5 em pé).
+    altura_do_personagem: float | None = None
+    #: Onde fica a base do personagem/pessoa, de 0 (topo) a 1 (borda de baixo); ``None``:
+    #: colada embaixo. Com a legenda embaixo, ~0,80 deixa o busto logo acima dela.
+    base_do_personagem: float | None = None
 
     def problemas(self) -> list[str]:
         erros = []
@@ -488,18 +493,23 @@ class CamadaDeAvatar(Camada):
 # ── onde ela fica ────────────────────────────────────────────────────────
 
 
-def casa(camada: Camada, largura: int, altura: int) -> Transformacao:
-    """A posição de casa: embaixo no meio em pé; embaixo à direita deitado e quadrado."""
+def casa(camada: Camada, largura: int, altura: int, *, altura_relativa: float | None = None,
+         base: float | None = None) -> Transformacao:
+    """A posição de casa: embaixo no meio em pé; embaixo à direita deitado e quadrado.
+    ``altura_relativa`` e ``base`` (frações da tela) trocam a altura e a linha de baixo."""
     em_pe = altura > largura
     p = camada.pessoa
     ph = (p.y1 - p.y0) * camada.altura
     pw = (p.x1 - p.x0) * camada.largura
-    s = (ALTURA_EM_PE if em_pe else ALTURA_DEITADO) * altura / max(ph, 1.0)
+    padrao = ALTURA_EM_PE if em_pe else ALTURA_DEITADO
+    s = (altura_relativa or padrao) * altura / max(ph, 1.0)
     s = min(s, LARGURA_MAXIMA * largura / max(pw, 1.0))
     if em_pe:
         dx = largura / 2 - s * (p.x0 + p.x1) / 2 * camada.largura
     else:
         dx = largura * (1 - MARGEM) - s * p.x1 * camada.largura
+    if base is not None:
+        return Transformacao(s, dx, base * altura - s * p.y1 * camada.altura)
     return Transformacao(s, dx, _no_chao(camada, s, altura))
 
 
@@ -590,7 +600,10 @@ class Montador:
         self.caixa_do_fundo = encaixe(*medidas, largura, altura)
         self.camada = camada_da_montagem(montagem) if camada == "montagem" else camada
         self.falas = list(falas)
-        self.casa = casa(self.camada, largura, altura) if self.camada is not None else None
+        self.casa = (casa(self.camada, largura, altura,
+                          altura_relativa=montagem.altura_do_personagem,
+                          base=montagem.base_do_personagem)
+                     if self.camada is not None else None)
         self.movimentos = sorted(plano.movimentos, key=lambda m: m.inicio) if mover else []
         self._alvos: dict[int, Transformacao] = {}
         self._rampas: dict[tuple, np.ndarray | None] = {}

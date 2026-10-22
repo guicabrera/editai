@@ -174,6 +174,11 @@ def argumentos() -> argparse.ArgumentParser:
                    help=argparse.SUPPRESS)
     m.add_argument("--manter-fundo-do-personagem", action="store_true",
                    help="não tira o fundo de cor única do personagem")
+    m.add_argument("--altura-do-personagem", type=float, metavar="FRACAO",
+                   help="altura do personagem ou da pessoa na tela, de 0 a 1 (padrão 0.5 em pé)")
+    m.add_argument("--base-do-personagem", type=float, metavar="FRACAO",
+                   help="onde fica a base dele, de 0 (topo) a 1 (embaixo); ex.: 0.8 para "
+                        "ficar logo acima da legenda (padrão: colado embaixo)")
     s = p.add_argument_group("saída")
     s.add_argument("--formato", choices=list(saida_mod.FORMATOS),
                    help="padrão: a extensão do -o, ou mp4")
@@ -542,7 +547,8 @@ def _montagem(a: argparse.Namespace):
                     cenas=a.cenas, matriz=a.matriz,
                     recorte=recorte or "modnet", formato=a.quadro,
                     tirar_fundo_do_personagem=not a.manter_fundo_do_personagem,
-                    fala=a.fala), ""
+                    fala=a.fala, altura_do_personagem=a.altura_do_personagem,
+                    base_do_personagem=a.base_do_personagem), ""
 
 
 __all__ = ["argumentos", "main"]
