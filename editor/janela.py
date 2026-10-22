@@ -375,7 +375,7 @@ class MontadorDeJanela:
             # A boca só mexe com fala: nas pausas, fica o primeiro quadro (o de boca
             # fechada, no personagem do vídeo de referência).
             rgba = (self.camada.personagem.quadro_em(t_saida) if self.falando(t_saida)
-                    else self.camada.personagem.quadros[0])
+                    else self.camada.rgba_parado(t_saida))
         else:
             rgba = self.camada.rgba(t_origem, t_saida)
         p = self.camada.pessoa

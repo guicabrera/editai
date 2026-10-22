@@ -121,6 +121,9 @@ class Montagem:
     #: Onde fica a base do personagem/pessoa, de 0 (topo) a 1 (borda de baixo); ``None``:
     #: colada embaixo. Com a legenda embaixo, ~0,80 deixa o busto logo acima dela.
     base_do_personagem: float | None = None
+    #: Um 2º GIF para as pausas da fala (boca fechada, piscando); ``None``: o 1º quadro
+    #: do personagem, parado.
+    personagem_parado: Path | None = None
 
     def problemas(self) -> list[str]:
         erros = []
@@ -395,13 +398,21 @@ class CamadaRecortada(Camada):
 class CamadaDePersonagem(Camada):
     """O personagem em loop, pelo tempo de saída."""
 
-    def __init__(self, personagem: Personagem):
+    def __init__(self, personagem: Personagem, parado: Personagem | None = None):
         self.personagem = personagem
+        self.parado = parado
         self.largura, self.altura = personagem.largura, personagem.altura
         self._medir([q[..., 3].astype(np.float32) / 255.0 for q in personagem.quadros])
 
     def rgba(self, t_origem: float, t_saida: float) -> np.ndarray:
         return self.personagem.quadro_em(t_saida)
+
+    def rgba_parado(self, t_saida: float) -> np.ndarray:
+        """O quadro das pausas: o do GIF parado, se há um do mesmo tamanho; senão o 1º."""
+        p = self.parado
+        if p is not None and p.quadros[0].shape == self.personagem.quadros[0].shape:
+            return p.quadro_em(t_saida)
+        return self.personagem.quadros[0]
 
 
 #: O pulinho ao trocar de pose (o do Telexplica): cresce de 0,95 a 1 neste tempo.
@@ -564,8 +575,11 @@ def alvo(posicao: str, de_casa: Transformacao, camada: Camada, largura: int, alt
 def camada_da_montagem(montagem: Montagem) -> Camada | None:
     """O que vai por cima: o personagem, a pessoa (sem fundo ou recortada) ou nada."""
     if montagem.personagem is not None:
+        parado = (ler_personagem(montagem.personagem_parado,
+                                 tirar_fundo=montagem.tirar_fundo_do_personagem)
+                  if montagem.personagem_parado is not None else None)
         return CamadaDePersonagem(ler_personagem(
-            montagem.personagem, tirar_fundo=montagem.tirar_fundo_do_personagem))
+            montagem.personagem, tirar_fundo=montagem.tirar_fundo_do_personagem), parado)
     if montagem.pessoa is None:
         return None
     info = video_mod.sondar(montagem.pessoa)
@@ -690,7 +704,7 @@ class Montador:
             rgba = self.camada.quadro_em(t_saida, self.camada.a_direita(centro, self.largura))
         elif (isinstance(self.camada, CamadaDePersonagem) and self.falas
                 and not falando(self.falas, t_saida)):
-            rgba = self.camada.personagem.quadros[0]       # a boca fechada, nas pausas
+            rgba = self.camada.rgba_parado(t_saida)       # a boca fechada, nas pausas
         else:
             rgba = self.camada.rgba(t_origem, t_saida)
         r = self._rampa(tr)

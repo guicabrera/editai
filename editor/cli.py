@@ -174,6 +174,9 @@ def argumentos() -> argparse.ArgumentParser:
                    help=argparse.SUPPRESS)
     m.add_argument("--manter-fundo-do-personagem", action="store_true",
                    help="não tira o fundo de cor única do personagem")
+    m.add_argument("--personagem-parado", type=Path, metavar="ANIMACAO",
+                   help="um 2º GIF para as pausas da fala (boca fechada, piscando); padrão: "
+                        "o 1º quadro do --personagem")
     m.add_argument("--altura-do-personagem", type=float, metavar="FRACAO",
                    help="altura do personagem ou da pessoa na tela, de 0 a 1 (padrão 0.5 em pé)")
     m.add_argument("--base-do-personagem", type=float, metavar="FRACAO",
@@ -548,7 +551,8 @@ def _montagem(a: argparse.Namespace):
                     recorte=recorte or "modnet", formato=a.quadro,
                     tirar_fundo_do_personagem=not a.manter_fundo_do_personagem,
                     fala=a.fala, altura_do_personagem=a.altura_do_personagem,
-                    base_do_personagem=a.base_do_personagem), ""
+                    base_do_personagem=a.base_do_personagem,
+                    personagem_parado=a.personagem_parado), ""
 
 
 __all__ = ["argumentos", "main"]
