@@ -34,6 +34,9 @@ from editor import cartoes as cartoes_mod
 PALCO = (1080, 608)
 #: Quanto o personagem esconde atrás da borda da janela (o busto "entra" nela).
 ENFIADO = 0.05
+#: Folga mínima entre o topo do personagem e o topo da tela (no quadro de 1080 de largura):
+#: no foco a janela sobe, e o personagem grande do centro sairia da tela.
+FOLGA_DO_TOPO = 60
 #: O pulinho na troca de lugar e o balanço da fala, em pixels de um quadro de 1080.
 PULO = 45
 GIRO_DO_PULO = 6
@@ -381,8 +384,10 @@ class MontadorDeJanela:
         p = self.camada.pessoa
         lc, ac = self.camada.largura, self.camada.altura
         visivel = max(1.0, (p.y1 - p.y0) * ac)
-        s = estado.tamanho * 0.9 / visivel
         k = self.geo.k
+        # o que aparece dele ocupa 0,9 do tamanho; não deixa passar do topo da tela
+        tamanho = min(estado.tamanho, (estado.piso - (FOLGA_DO_TOPO + PULO) * k) / 0.9)
+        s = max(1.0, tamanho) * 0.9 / visivel
         balanco = math.sin(t_saida * 6) * BALANCO * k if self.falando(t_saida) else 0.0
         dy = balanco - pulo * PULO * k
         img = Image.fromarray(rgba, "RGBA")

@@ -124,6 +124,10 @@ class Montagem:
     #: Um 2º GIF para as pausas da fala (boca fechada, piscando); ``None``: o 1º quadro
     #: do personagem, parado.
     personagem_parado: Path | None = None
+    #: Uma marca d'água (PNG com alfa) embaixo, no meio, por cima de tudo; ``marca_largura``
+    #: é a fração da largura da tela que ela ocupa.
+    marca: Path | None = None
+    marca_largura: float = 0.3
 
     def problemas(self) -> list[str]:
         erros = []

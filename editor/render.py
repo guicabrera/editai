@@ -624,6 +624,7 @@ def _editar_montagem(montagem: Montagem, destino: Path, edicao: OpcoesDeEdicao,
                       tamanho=edicao.tamanho_legenda)
     passo = 1.0 / float(fps)
     total_quadros = max(1, round(linha.duracao * float(fps)))
+    marca = _marca(montagem, largura, altura)
 
     with video_mod.Gravador(destino, saida_r, largura, altura, fps,
                             com_audio=f.som is not None) as gravador:
@@ -643,6 +644,8 @@ def _editar_montagem(montagem: Montagem, destino: Path, edicao: OpcoesDeEdicao,
                 img = _cartoes_no_quadro(img, p.cartoes, t_saida)
                 _icones(img, p, t_saida, montador.lado_livre(t_saida))
                 legenda.desenhar(img, p, t_saida)
+            if marca is not None:
+                img.paste(marca[0], marca[1], marca[0])
             gravador.quadro(np.asarray(img))
             if i % 15 == 0:
                 avisar("desenhando", i / total_quadros, f"quadro {i} de {total_quadros}")
@@ -657,3 +660,18 @@ def _editar_montagem(montagem: Montagem, destino: Path, edicao: OpcoesDeEdicao,
 
 __all__ = ["Cancelado", "Resultado", "editar", "empurrao", "janela", "montar_audio",
            "nivel_base", "nivel_de_zoom"]
+
+
+def _marca(montagem, largura: int, altura: int):
+    """A marca d'água já no tamanho e o lugar dela (embaixo, no meio), ou ``None``."""
+    caminho = getattr(montagem, "marca", None)
+    if caminho is None:
+        return None
+    from PIL import Image
+
+    img = Image.open(caminho).convert("RGBA")
+    w = max(1, round(largura * montagem.marca_largura))
+    img = img.resize((w, max(1, round(img.height * w / img.width))), Image.LANCZOS)
+    x = (largura - img.width) // 2
+    y = round(altura * 0.965) - img.height
+    return img, (x, y)
