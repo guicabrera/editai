@@ -404,12 +404,21 @@ class MontadorDeJanela:
 
 
 def _sombra_do_personagem(img: Image.Image, k: float) -> Image.Image:
-    """A sombra borrada (``drop-shadow(0 18px 40px)``), feita num tamanho pequeno."""
-    pequeno = img.getchannel("A").resize((max(1, img.width // 6), max(1, img.height // 6)),
-                                         Image.BILINEAR)
-    pequeno = pequeno.filter(ImageFilter.GaussianBlur(max(1.0, 40 * k / 6)))
-    alfa = pequeno.resize(img.size, Image.BILINEAR)
-    sombra = Image.new("RGBA", img.size, (0, 0, 0, 255))
+    """A sombra borrada (``drop-shadow(0 18px 40px)``), feita num tamanho pequeno.
+
+    Com uma margem em volta do tamanho do borrão: sem ela, o borrão era cortado na caixa
+    do sprite e a sombra virava um quadrado escuro (num busto, que encosta nas bordas da
+    imagem). A margem é igual dos quatro lados, então o centro não muda."""
+    raio = max(1.0, 40 * k / 6)
+    m = int(raio * 3) + 1                                    # margem, no tamanho pequeno
+    w, h = max(1, img.width // 6), max(1, img.height // 6)
+    pequeno = Image.new("L", (w + 2 * m, h + 2 * m), 0)
+    pequeno.paste(img.getchannel("A").resize((w, h), Image.BILINEAR), (m, m))
+    pequeno = pequeno.filter(ImageFilter.GaussianBlur(raio))
+    escala = img.width / w
+    tamanho = (round((w + 2 * m) * escala), round((h + 2 * m) * img.height / h))
+    alfa = pequeno.resize(tamanho, Image.BILINEAR)
+    sombra = Image.new("RGBA", tamanho, (0, 0, 0, 255))
     sombra.putalpha(alfa)
     return sombra
 
