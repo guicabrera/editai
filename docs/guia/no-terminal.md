@@ -86,6 +86,12 @@ editai --formatos                                 # o que este computador grava
 | `--janela`, `--sem-janela` | a cena numa janela 16:9 com câmera | sem |
 | `--pessoa` | o vídeo de você falando, por cima do fundo | o vídeo do argumento |
 | `--personagem` | um GIF, PNG animado ou WebP, em loop por cima | |
+| `--personagem-parado` | com `--personagem`: um GIF para as pausas da fala (o outro fica para quando fala) | |
+| `--altura-do-personagem N` | altura do personagem ou da pessoa na tela, de 0 a 1 | `0.5` em pé |
+| `--base-do-personagem N` | onde fica a base dele, de 0 (topo) a 1 (embaixo); `0.8` fica logo acima da legenda | colado embaixo |
+| `--fundo-da-janela IMAGEM` | com `--janela`: esta imagem atrás da janela, no lugar da cena desfocada | |
+| `--marca PNG` | marca d'água (PNG com alfa) embaixo, no meio, por cima de tudo | |
+| `--marca-largura N` | a largura da marca, em fração da largura da tela | `0.3` |
 | `--avatar NOME` | o seu avatar (criado na página), por cima: a pose de cada frase e a boca nas sílabas | |
 | `--audio` | um ou vários áudios separados (a narração gravada à parte), tocados em ordem | |
 | `--fala` | de onde vem o áudio: `fundo`, `pessoa` ou `audio` | o `--audio`; senão a pessoa, se tiver som; senão o fundo |
