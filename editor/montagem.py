@@ -128,6 +128,8 @@ class Montagem:
     #: é a fração da largura da tela que ela ocupa.
     marca: Path | None = None
     marca_largura: float = 0.3
+    #: Na janela, uma imagem fixa atrás dela (cobrindo a tela) no lugar da cena desfocada.
+    fundo_da_janela: Path | None = None
 
     def problemas(self) -> list[str]:
         erros = []

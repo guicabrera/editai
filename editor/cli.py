@@ -181,6 +181,8 @@ def argumentos() -> argparse.ArgumentParser:
                    help="marca d'água (PNG com alfa) embaixo, no meio, por cima de tudo")
     m.add_argument("--marca-largura", type=float, default=0.3, metavar="FRACAO",
                    help="largura da marca, em fração da largura da tela (padrão 0.3)")
+    m.add_argument("--fundo-da-janela", type=Path, metavar="IMAGEM",
+                   help="com --janela: esta imagem atrás da janela, no lugar da cena desfocada")
     m.add_argument("--altura-do-personagem", type=float, metavar="FRACAO",
                    help="altura do personagem ou da pessoa na tela, de 0 a 1 (padrão 0.5 em pé)")
     m.add_argument("--base-do-personagem", type=float, metavar="FRACAO",
@@ -557,7 +559,8 @@ def _montagem(a: argparse.Namespace):
                     fala=a.fala, altura_do_personagem=a.altura_do_personagem,
                     base_do_personagem=a.base_do_personagem,
                     personagem_parado=a.personagem_parado, marca=a.marca,
-                    marca_largura=a.marca_largura), ""
+                    marca_largura=a.marca_largura,
+                    fundo_da_janela=a.fundo_da_janela), ""
 
 
 __all__ = ["argumentos", "main"]

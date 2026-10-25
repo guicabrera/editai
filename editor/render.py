@@ -615,7 +615,9 @@ def _editar_montagem(montagem: Montagem, destino: Path, edicao: OpcoesDeEdicao,
                       for x in planos]
         montador = janela_mod.MontadorDeJanela(largura, altura, fundo=fundo,
                                                fundo_na_saida=na_saida, camada=camada,
-                                               planos=planos, cartoes=p.cartoes, falas=falas)
+                                               planos=planos, cartoes=p.cartoes, falas=falas,
+                                               fundo_fixo=_fundo_da_janela(montagem, largura,
+                                                                           altura))
     else:
         montador = Montador(montagem, p, largura, altura, info_do_fundo, mover=edicao.mover,
                             fundo=fundo if na_saida else None, fundo_na_saida=na_saida,
@@ -660,6 +662,16 @@ def _editar_montagem(montagem: Montagem, destino: Path, edicao: OpcoesDeEdicao,
 
 __all__ = ["Cancelado", "Resultado", "editar", "empurrao", "janela", "montar_audio",
            "nivel_base", "nivel_de_zoom"]
+
+
+def _fundo_da_janela(montagem, largura: int, altura: int):
+    """A imagem de trás da janela, cobrindo a tela (cortada no meio), ou ``None``."""
+    caminho = getattr(montagem, "fundo_da_janela", None)
+    if caminho is None:
+        return None
+    from PIL import Image, ImageOps
+
+    return ImageOps.fit(Image.open(caminho).convert("RGB"), (largura, altura), Image.LANCZOS)
 
 
 def _marca(montagem, largura: int, altura: int):
