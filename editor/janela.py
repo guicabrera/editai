@@ -303,13 +303,15 @@ class MontadorDeJanela:
     def __init__(self, largura: int, altura: int, *, fundo, fundo_na_saida: bool,
                  camada=None, planos: Sequence[Plano] = (),
                  cartoes: Sequence[cartoes_mod.Cartao] = (),
-                 falas: Sequence[tuple[float, float]] = ()):
+                 falas: Sequence[tuple[float, float]] = (),
+                 fundo_fixo: Image.Image | None = None):
         self.geo = Geometria(largura, altura)
         self.direcao = Direcao(planos, self.geo)
         self.fundo, self.fundo_na_saida = fundo, fundo_na_saida
         self.camada = camada
         self.cartoes = list(cartoes)
         self.falas = list(falas)
+        self.fundo_fixo = fundo_fixo            # uma imagem atrás da janela, já no tamanho
 
     def falando(self, t: float) -> bool:
         """Se há fala em ``t`` (com 40 ms antes e 60 ms depois, como no chat)."""
@@ -347,7 +349,8 @@ class MontadorDeJanela:
         janela = camera(palco, estado, extra)
         for c in ativos:
             cartoes_mod.desenhar(janela, c, t_saida, palco=False)
-        tela = fundo_desfocado(cena, largura, altura).convert("RGBA")
+        tela = (self.fundo_fixo if self.fundo_fixo is not None
+                else fundo_desfocado(cena, largura, altura)).convert("RGBA")
         self._personagem(tela, estado, pulo, t_origem, t_saida)
         self._bordas(tela, estado)
         tela.alpha_composite(janela, (round(estado.x), round(estado.y)))

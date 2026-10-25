@@ -182,6 +182,16 @@ class TestOQuadro:
             assert img.size == (largura, altura) and img.mode == "RGB"
             assert estado.legenda > 0
 
+    def test_fundo_fixo_no_lugar_do_desfocado(self):
+        from PIL import Image
+
+        creme = Image.new("RGB", (540, 960), (245, 240, 230))
+        m = janela.MontadorDeJanela(540, 960, fundo=self._Fundo(), fundo_na_saida=True,
+                                    fundo_fixo=creme)
+        img, estado = m.quadro(0.5, 0.5)
+        assert img.getpixel((5, 5)) == (245, 240, 230)          # fora da janela: o creme
+        assert img.getpixel((270, round(estado.y + estado.altura / 2))) != (245, 240, 230)
+
     def test_a_boca_so_mexe_na_fala(self):
         falas = janela.falas([Palavra("a", 0.0, 0.3), Palavra("b", 0.4, 0.7),
                               Palavra("c", 2.0, 2.3)])
