@@ -372,9 +372,11 @@ class MontadorDeJanela:
                     t_saida: float) -> None:
         if self.camada is None:
             return
-        from editor.montagem import CamadaDeAvatar, CamadaDePersonagem
+        from editor.montagem import CamadaDeAvatar, CamadaDeGestos, CamadaDePersonagem
 
-        if isinstance(self.camada, CamadaDeAvatar):
+        if isinstance(self.camada, CamadaDeGestos):
+            rgba = self.camada.rgba_falando(t_saida, self.falando(t_saida))
+        elif isinstance(self.camada, CamadaDeAvatar):
             # a boca é a das sílabas; do lado direito, espelhado (aponta para o meio)
             rgba = self.camada.quadro_em(t_saida, self.camada.a_direita(estado.cx, tela.width))
         elif isinstance(self.camada, CamadaDePersonagem):
