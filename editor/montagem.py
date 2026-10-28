@@ -24,6 +24,7 @@ um jogo, slides), e não um borrão do mesmo quadro.
 """
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -130,6 +131,9 @@ class Montagem:
     marca_largura: float = 0.3
     #: Na janela, uma imagem fixa atrás dela (cobrindo a tela) no lugar da cena desfocada.
     fundo_da_janela: Path | None = None
+    #: Uma pasta de gestos do personagem (``cordeirinho_gesto_<nome>.gif``): cada frase
+    #: toca o gesto da pose dela (aulas e vídeos longos). Vai junto com o ``personagem``.
+    gestos: Path | None = None
 
     def problemas(self) -> list[str]:
         erros = []
@@ -139,6 +143,8 @@ class Montagem:
             erros.append("a biblioteca de cenas precisa da matriz (o cenas.json)")
         if sum(x is not None for x in (self.pessoa, self.personagem, self.avatar)) > 1:
             erros.append("por cima vai o vídeo da pessoa, um personagem ou o avatar, um só")
+        if self.gestos is not None and self.personagem is None:
+            erros.append("os gestos vão com o personagem (o GIF falando)")
         if self.fundo is None and self.fala == "fundo":
             erros.append("as cenas da biblioteca não têm som: o áudio vem de um áudio "
                          "separado ou do vídeo da pessoa")
@@ -419,6 +425,196 @@ class CamadaDePersonagem(Camada):
         if p is not None and p.quadros[0].shape == self.personagem.quadros[0].shape:
             return p.quadro_em(t_saida)
         return self.personagem.quadros[0]
+
+
+#: A pose de cada frase (:func:`editor.avatar.poses_das_falas`) → o gesto que toca. Fora
+#: daqui (ou sem o clipe do gesto), a frase fica na base (a boca fala do mesmo jeito).
+GESTO_DA_POSE = {
+    "rindo": "comemorando", "surpreso": "comemorando", "joinha": "comemorando",
+    "pensando": "pensando",
+    "apontando_voce": "apontando", "apontando_lado": "apontando",
+    "apontando_cima": "explicando", "explicando": "explicando",
+}
+#: O gesto da última frase (a despedida, o "segue a The Lamb"). Na primeira não: o
+#: áudio já começa falando, e o aceno ficava com cara de "oi" atrasado.
+GESTO_DE_DESPEDIDA = "acenando"
+#: A base, entre os gestos: o começo do clipe (a respiração perto da pose de repouso).
+GESTO_BASE = "ouvindo"
+#: Um gesto atrasado (o anterior ainda tocava) só entra se sobrar isto da frase dele.
+SOBRA_MINIMA_S = 0.8
+
+
+@dataclass
+class Clipe:
+    """Um gesto preparado (``gesto_fases.py``): os quadros sem a boca, o nariz de cada um e
+    as fases — entrada [0, e), sustentação [s0, s1] (em vai-e-volta) e saída [s1, fim]."""
+
+    quadros: list[np.ndarray]
+    narizes: list[tuple[int, int]]
+    entrada: int
+    sustenta: tuple[int, int]
+    fim: int
+
+
+def _ler_gif(caminho: Path) -> list[np.ndarray]:
+    im = Image.open(caminho)
+    saida = []
+    for k in range(getattr(im, "n_frames", 1)):
+        im.seek(k)
+        saida.append(np.asarray(im.convert("RGBA")).copy())
+    return saida
+
+
+def ler_gestos(pasta: Path) -> tuple[dict[str, Clipe], dict[str, tuple], float]:
+    """Os gestos de uma pasta preparada (o ``gestos.json`` do ``gesto_fases.py``): os
+    clipes, as bocas (forma → (RGBA, dx, dy) até o nariz) e o fps dos clipes."""
+    pasta = Path(pasta)
+    arq = pasta / "gestos.json"
+    if not arq.is_file():
+        raise PersonagemInvalido("A pasta de gestos precisa do gestos.json (rode o "
+                                 "gesto_fases.py nela).")
+    info = json.loads(arq.read_text(encoding="utf-8"))
+    clipes = {}
+    for nome, g in info["gestos"].items():
+        clipes[nome] = Clipe(_ler_gif(pasta / g["arquivo"]), [tuple(n) for n in g["narizes"]],
+                             g["entrada"][1], tuple(g["sustenta"]), g["saida"][1])
+    if GESTO_BASE not in clipes:
+        raise PersonagemInvalido(f"A pasta de gestos precisa do gesto “{GESTO_BASE}”.")
+    if len({c.quadros[0].shape for c in clipes.values()}) > 1:
+        raise PersonagemInvalido("Os gestos precisam ter todos o mesmo tamanho.")
+    bocas = {forma: (np.asarray(Image.open(pasta / b["arquivo"]).convert("RGBA")),
+                     b["dx"], b["dy"]) for forma, b in info["bocas"].items()}
+    return clipes, bocas, float(info["fps"])
+
+
+def trilha_de_gestos(poses: Sequence[tuple[float, float, str]], gestos: dict
+                     ) -> list[tuple[float, float, str | None]]:
+    """``(início, fim, gesto)`` de cada frase: a pose dela pelo :data:`GESTO_DA_POSE`, a
+    última com o aceno; sem gesto (ou sem o clipe dele), ``None``."""
+    trilha = []
+    for k, (a0, a1, pose) in enumerate(poses):
+        gesto = (GESTO_DE_DESPEDIDA if k == len(poses) - 1 and k > 0
+                 else GESTO_DA_POSE.get(pose))
+        trilha.append((a0, a1, gesto if gesto in gestos else None))
+    return trilha
+
+
+def _vai_e_volta(n: int, k: float) -> int:
+    """O índice ``k`` (contínuo) andando de 0 a ``n`` e voltando, sem saltar."""
+    if n <= 0:
+        return 0
+    pos = int(k) % (2 * n)
+    return pos if pos <= n else 2 * n - pos
+
+
+@dataclass
+class Toque:
+    """Um gesto na linha do tempo: começa em ``inicio``, sustenta ``voltas`` meias-voltas
+    (ímpar: termina no fim da sustentação, onde a saída começa) e sai."""
+
+    inicio: float
+    gesto: str
+    voltas: int
+
+    def tempos(self, c: Clipe, fps: float) -> tuple[float, float, float]:
+        """(fim da entrada, início da saída, fim)."""
+        lado = c.sustenta[1] - c.sustenta[0]
+        e = self.inicio + c.entrada / fps
+        s = e + self.voltas * lado / fps
+        return e, s, s + (c.fim - c.sustenta[1]) / fps
+
+
+class CamadaDeGestos(Camada):
+    """O personagem com um clipe por gesto (aulas e vídeos longos), com tudo decidido pela
+    fala:
+
+    - cada frase toca o gesto dela do tamanho dela: a entrada, a sustentação em
+      vai-e-volta enquanto a frase durar (frases seguidas com o mesmo gesto o mantêm) e a
+      saída — que só começa no fim da sustentação, onde ela emenda sem salto;
+    - entre os gestos, a base (a respiração perto da pose de repouso, de onde todo gesto
+      parte e para onde volta);
+    - a boca é sempre a das sílabas do áudio (``bocas``), colada no nariz do quadro."""
+
+    def __init__(self, clipes: dict[str, Clipe], bocas: dict[str, tuple], fps: float,
+                 trilha: Sequence[tuple[float, float, str | None]]):
+        self.clipes, self.bocas_de, self.fps = clipes, bocas, fps
+        self.trilha = list(trilha)
+        self.bocas: list[str] = []          # a boca de cada quadro do vídeo (render.py)
+        self.fps_do_video = 30.0
+        self.toques = self._toques()
+        base = clipes[GESTO_BASE].quadros[0]
+        self.altura, self.largura = base.shape[:2]
+        self._medir([q[..., 3].astype(np.float32) / 255.0
+                     for c in clipes.values() for q in c.quadros[::12]])
+
+    def _toques(self) -> list[Toque]:
+        toques: list[Toque] = []
+        livre = float("-inf")
+        frases = list(self.trilha)
+        # a despedida tem a vez: começa com a última frase, e gesto que ainda estaria
+        # tocando nessa hora fica de fora (senão o aceno caía depois do fim do vídeo)
+        despedida = (frases[-1][0] if frases and frases[-1][2] == GESTO_DE_DESPEDIDA
+                     else float("inf"))
+        i = 0
+        while i < len(frases):
+            a0, a1, gesto = frases[i]
+            # frases seguidas com o mesmo gesto: um toque só, até o fim da última
+            while i + 1 < len(frases) and frases[i + 1][2] == gesto:
+                a1 = frases[i + 1][1]
+                i += 1
+            i += 1
+            if gesto is None:
+                continue
+            c = self.clipes[gesto]
+            ini = max(a0, livre)
+            if ini > a0 and a1 - ini < SOBRA_MINIMA_S and gesto != GESTO_DE_DESPEDIDA:
+                continue
+            lado = max(1, c.sustenta[1] - c.sustenta[0])
+            quer = (a1 - ini) * self.fps - c.entrada - (c.fim - c.sustenta[1])
+            voltas = max(1, 2 * round((quer / lado - 1) / 2) + 1)    # ímpar, perto do que cabe
+            t = Toque(ini, gesto, voltas)
+            if gesto != GESTO_DE_DESPEDIDA and t.tempos(c, self.fps)[2] > despedida:
+                continue
+            toques.append(t)
+            livre = t.tempos(c, self.fps)[2]
+        return toques
+
+    def _quadro_do_gesto(self, t: float) -> tuple[Clipe, int]:
+        for toque in self.toques:
+            c = self.clipes[toque.gesto]
+            e, s, fim = toque.tempos(c, self.fps)
+            if toque.inicio <= t < fim:
+                if t < e:
+                    return c, min(c.entrada, int((t - toque.inicio) * self.fps))
+                if t < s:
+                    k = _vai_e_volta(c.sustenta[1] - c.sustenta[0], (t - e) * self.fps)
+                    return c, c.sustenta[0] + k
+                return c, min(c.fim, c.sustenta[1] + int((t - s) * self.fps))
+        # a base: a respiração, contada do fim do último gesto (que acabou no repouso)
+        fim = max((tq.tempos(self.clipes[tq.gesto], self.fps)[2] for tq in self.toques
+                   if tq.tempos(self.clipes[tq.gesto], self.fps)[2] <= t), default=0.0)
+        c = self.clipes[GESTO_BASE]
+        return c, _vai_e_volta(c.entrada, (t - fim) * self.fps)
+
+    def boca_em(self, t: float, falando: bool) -> str:
+        if self.bocas:
+            return self.bocas[min(len(self.bocas) - 1, int(round(t * self.fps_do_video)))]
+        return "meia" if falando else "fechada"
+
+    def rgba_falando(self, t_saida: float, falando: bool = True) -> np.ndarray:
+        c, k = self._quadro_do_gesto(t_saida)
+        q = c.quadros[k].copy()
+        spr, dx, dy = self.bocas_de[self.boca_em(t_saida, falando)]
+        nx, ny = c.narizes[k]
+        x0, y0 = nx + dx, ny + dy
+        h, w = spr.shape[:2]
+        if 0 <= x0 and 0 <= y0 and x0 + w <= q.shape[1] and y0 + h <= q.shape[0]:
+            a = spr[..., 3:] > 0
+            q[y0:y0 + h, x0:x0 + w] = np.where(a, spr, q[y0:y0 + h, x0:x0 + w])
+        return q
+
+    def rgba(self, t_origem: float, t_saida: float) -> np.ndarray:
+        return self.rgba_falando(t_saida)
 
 
 #: O pulinho ao trocar de pose (o do Telexplica): cresce de 0,95 a 1 neste tempo.
@@ -708,6 +904,9 @@ class Montador:
             p = self.camada.pessoa
             centro = tr.dx + tr.escala * (p.x0 + p.x1) / 2 * self.camada.largura
             rgba = self.camada.quadro_em(t_saida, self.camada.a_direita(centro, self.largura))
+        elif isinstance(self.camada, CamadaDeGestos):
+            rgba = self.camada.rgba_falando(
+                t_saida, not self.falas or falando(self.falas, t_saida))
         elif (isinstance(self.camada, CamadaDePersonagem) and self.falas
                 and not falando(self.falas, t_saida)):
             rgba = self.camada.rgba_parado(t_saida)       # a boca fechada, nas pausas
@@ -723,8 +922,8 @@ class Montador:
 
 
 __all__ = ["FALAS", "FORMATOS", "RECORTES", "Camada", "CamadaComAlfa", "CamadaDeAvatar",
-           "CamadaDePersonagem",
+           "CamadaDeGestos", "CamadaDePersonagem", "GESTO_DA_POSE",
            "CamadaRecortada", "Montador", "Montagem", "Personagem", "PersonagemInvalido",
            "alvo", "camada_da_montagem", "casa", "cor_do_fundo", "encaixe", "falando",
-           "ler_personagem", "sobras",
+           "ler_gestos", "ler_personagem", "sobras", "trilha_de_gestos",
            "tamanho_do_quadro", "tirar_fundo_de_cor"]

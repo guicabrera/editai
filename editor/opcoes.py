@@ -1,6 +1,8 @@
 """As escolhas de edição — as mesmas na linha de comando e na interface."""
 from __future__ import annotations
 
+import re
+
 from dataclasses import asdict, dataclass, fields
 
 from editor.transcricao import IDIOMA_PADRAO, MODELO_PADRAO, MODELOS
@@ -64,6 +66,10 @@ class OpcoesDeEdicao:
     #: "classica" (uma linha, karaokê) ou "destaques" (páginas de até 4 palavras que
     #: entram uma a uma, com cores e a frase de efeito numa pílula amarela).
     estilo_da_legenda: str = "classica"
+    #: As cores da legenda clássica, em "#RRGGBB": a da palavra dita e a da palavra-chave.
+    #: Vazias, o branco e o amarelo de sempre.
+    cor_da_legenda: str = ""
+    cor_do_destaque: str = ""
     #: O texto que a pessoa falou (ou leu), colado no passo 3: a legenda pega a grafia dele
     #: onde ele casa com o que o Whisper ouviu (:func:`editor.transcricao.grafia_do_texto`).
     #: Não entra nos presets, porque é de um vídeo só.
@@ -94,6 +100,10 @@ class OpcoesDeEdicao:
             erros.append("o volume dos sons vai de 0,3 a 1,5")
         if self.caracteres_por_linha is not None and not 10 <= self.caracteres_por_linha <= 42:
             erros.append("a legenda vai de 10 a 42 caracteres por linha")
+        for nome in ("cor_da_legenda", "cor_do_destaque"):
+            cor = getattr(self, nome)
+            if cor and not re.fullmatch(r"#[0-9a-fA-F]{6}", cor):
+                erros.append(f"a cor ({nome}) vai como #RRGGBB, não {cor}")
         from editor import plano, sons, voz
 
         if self.estilo_da_legenda not in plano.ESTILOS_DA_LEGENDA:

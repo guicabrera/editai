@@ -192,11 +192,21 @@ def forma(largura: float, altura: float, estilo: int) -> list[tuple[float, float
     return pontos
 
 
+def _rgb(cor: str) -> tuple[int, int, int] | None:
+    """ "#A65437" vira (166, 84, 55); vazio, None."""
+    if not cor:
+        return None
+    return tuple(int(cor[i:i + 2], 16) for i in (1, 3, 5))
+
+
 class Legenda:
     """Desenha a legenda de um plano num quadro de ``largura`` × ``altura``."""
 
-    def __init__(self, largura: int, altura: int, *, vertical: bool, tamanho: float = 1.0):
+    def __init__(self, largura: int, altura: int, *, vertical: bool, tamanho: float = 1.0,
+                 cor_dita: str = "", cor_chave: str = ""):
         self.largura, self.altura = largura, altura
+        self.cor_dita = _rgb(cor_dita) or BRANCO
+        self.cor_chave = _rgb(cor_chave) or AMARELO
         self.tamanho = tamanho
         curto = min(largura, altura)
         self.em = max(12, round(curto * (CORPO_VERTICAL if vertical else CORPO_HORIZONTAL)
@@ -387,7 +397,7 @@ class Legenda:
                 x += w + vao + espaco
                 continue
             dita = t >= p.inicio
-            cor = (AMARELO if i == bloco.chave else BRANCO) if dita else CINZA
+            cor = (self.cor_chave if i == bloco.chave else self.cor_dita) if dita else CINZA
             d.text((x, self.base), p.texto, font=f, fill=cor, anchor="ls",
                    stroke_width=contorno, stroke_fill=PRETO)
             x += w + espaco

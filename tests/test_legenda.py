@@ -93,3 +93,19 @@ class TestOAdesivo:
     def test_palavra_sozinha_nao_abre(self):
         lg = leg.Legenda(1080, 1920, vertical=True)
         assert lg.abertura(_plano("sozinha").blocos[0], 0, 0) == 0.0
+
+
+def test_cores_da_legenda_classica():
+    from editor.legenda import AMARELO, BRANCO, Legenda
+
+    padrao = Legenda(1080, 1920, vertical=True)
+    assert (padrao.cor_dita, padrao.cor_chave) == (BRANCO, AMARELO)
+    marca = Legenda(1080, 1920, vertical=True, cor_dita="#F3EADD", cor_chave="#C9704A")
+    assert (marca.cor_dita, marca.cor_chave) == ((243, 234, 221), (201, 112, 74))
+
+
+def test_cor_da_legenda_invalida():
+    from editor.opcoes import OpcoesDeEdicao
+
+    assert any("#RRGGBB" in e for e in OpcoesDeEdicao(cor_do_destaque="laranja").problemas())
+    assert not OpcoesDeEdicao(cor_da_legenda="#F3EADD").problemas()

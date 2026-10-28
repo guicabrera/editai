@@ -38,10 +38,13 @@ from editor import video as video_mod
 from editor.legenda import Legenda
 from editor.montagem import (
     CamadaDeAvatar,
+    CamadaDeGestos,
     Montador,
     Montagem,
     camada_da_montagem,
+    ler_gestos,
     tamanho_do_quadro,
+    trilha_de_gestos,
 )
 from editor.opcoes import OpcoesDeEdicao
 
@@ -97,7 +100,9 @@ def obter_palavras(entrada: Path, duracao: float, edicao: OpcoesDeEdicao,
                    progresso: Progresso) -> list[transcricao.Palavra]:
     """A transcrição guardada deste arquivo (vídeo ou áudio), ou uma nova."""
     # as palavras do bipe vão de dica: sem ela, o Whisper escreve "coca ainda"
-    dica = transcricao.dica_das_palavras(censura.lista(edicao.bipe))
+    # e os termos entre aspas do texto falado (o inglês de um roteiro bilíngue)
+    dica = transcricao.dica_das_palavras(censura.lista(edicao.bipe)
+                                         + transcricao.termos_entre_aspas(edicao.texto_falado))
     origem = transcricao.identidade(entrada, idioma=edicao.idioma, modelo=edicao.modelo,
                                     dica=dica)
     chave = hashlib.sha1(json.dumps(origem, sort_keys=True).encode()).hexdigest()[:16]
@@ -497,7 +502,8 @@ def editar(entrada: Path | None, destino: Path, edicao: OpcoesDeEdicao,
     largura, altura = saida_mod.tamanho(info.largura, info.altura, saida_r.resolucao,
                                         saida_r.formato)
     fps = saida_mod.fps_de_saida(info.fps, saida_r.fps, saida_r.formato)
-    legenda = Legenda(largura, altura, vertical=info.vertical, tamanho=edicao.tamanho_legenda)
+    legenda = Legenda(largura, altura, vertical=info.vertical, tamanho=edicao.tamanho_legenda,
+                      cor_dita=edicao.cor_da_legenda, cor_chave=edicao.cor_do_destaque)
     passo = 1.0 / float(fps)
     total_quadros = max(1, round(linha.duracao * float(fps)))
 
@@ -603,6 +609,17 @@ def _editar_montagem(montagem: Montagem, destino: Path, edicao: OpcoesDeEdicao,
                  if f.audio is not None else ["fechada"] * total)
         camada = CamadaDeAvatar.do_avatar(montagem.avatar, avatar_mod.poses_das_falas(p.blocos),
                                           bocas, float(fps))
+    elif montagem.gestos is not None:
+        # um clipe por gesto, pela pose de cada frase da legenda
+        clipes, bocas_dos_gestos, fps_dos_gestos = ler_gestos(montagem.gestos)
+        camada = CamadaDeGestos(clipes, bocas_dos_gestos, fps_dos_gestos, trilha_de_gestos(
+            avatar_mod.poses_das_falas(p.blocos), clipes))
+        # a boca de cada quadro pelas sílabas da voz cortada (como no avatar)
+        total = max(1, round(linha.duracao * float(fps)))
+        camada.bocas = (avatar_mod.bocas_por_quadro(voz_cortada(f.audio, linha),
+                                                    video_mod.TAXA, float(fps), total)
+                        if f.audio is not None else [])
+        camada.fps_do_video = float(fps)
     else:
         camada = camada_da_montagem(montagem)
     falas = janela_mod.falas(f.no_editado)
@@ -623,7 +640,8 @@ def _editar_montagem(montagem: Montagem, destino: Path, edicao: OpcoesDeEdicao,
                             fundo=fundo if na_saida else None, fundo_na_saida=na_saida,
                             camada=camada, falas=falas)
     legenda = Legenda(largura, altura, vertical=altura > largura,
-                      tamanho=edicao.tamanho_legenda)
+                      tamanho=edicao.tamanho_legenda,
+                      cor_dita=edicao.cor_da_legenda, cor_chave=edicao.cor_do_destaque)
     passo = 1.0 / float(fps)
     total_quadros = max(1, round(linha.duracao * float(fps)))
     marca = _marca(montagem, largura, altura)

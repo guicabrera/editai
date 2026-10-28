@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -181,6 +182,23 @@ def identidade(video: Path, *, idioma: str, modelo: str, dica: str = "") -> dict
 def dica_das_palavras(palavras: list[str]) -> str:
     """A dica para o Whisper: a lista em uma frase, com o ponto final."""
     return ", ".join(palavras) + "." if palavras else ""
+
+
+#: No máximo tantos termos entre aspas viram dica (a dica longa demais atrapalha o resto).
+TERMOS_NA_DICA = 12
+
+
+def termos_entre_aspas(texto: str) -> list[str]:
+    """Os termos entre aspas do texto falado, sem repetir, na ordem: num roteiro bilíngue,
+    são as palavras em inglês. De dica para o Whisper, ele escreve "whaddya" em vez de
+    ouvir sílabas soltas ("wǒ diǎ", visto em 28/10/2026), e a grafia do texto casa."""
+    vistos, saida = set(), []
+    for m in re.finditer(r'["“”]([^"“”]{1,40})["“”]', texto):
+        termo = m.group(1).strip(" .,!?…")
+        if termo and termo.lower() not in vistos:
+            vistos.add(termo.lower())
+            saida.append(termo)
+    return saida[:TERMOS_NA_DICA]
 
 
 # ── o texto conhecido ────────────────────────────────────────────────────
@@ -460,4 +478,4 @@ __all__ = ["CASAMENTO_MINIMO", "IDIOMA_PADRAO", "MODELOS", "MODELO_PADRAO", "PAR
            "REVISOES", "TRECHO_MAXIMO", "VARIAVEL_FALSA",
            "Palavra", "ajustar_ao_texto", "carregar", "chaves", "dica_das_palavras",
            "grafia_do_texto", "identidade", "modelo_baixado", "por_extenso", "salvar",
-           "texto_ao_lado", "transcrever"]
+           "termos_entre_aspas", "texto_ao_lado", "transcrever"]

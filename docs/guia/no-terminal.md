@@ -73,6 +73,8 @@ editai --formatos                                 # o que este computador grava
 | `--sem-sons-por-palavra` | sem o som de cada palavra ("dinheiro" e as moedas) | |
 | `--animacoes` | os cartões animados, escritos pelo Gemini | |
 | `--legenda` | `classica` ou `destaques` | `classica` |
+| `--cor-da-legenda` | a cor da palavra dita na legenda clássica (`#RRGGBB`) | branco |
+| `--cor-do-destaque` | a cor da palavra-chave na legenda clássica (`#RRGGBB`) | amarelo |
 | `--texto-falado ARQUIVO` | o texto que você falou (.txt): a legenda pega a grafia dele | |
 | `--voz` | `original`, `limpa` ou `estudio` | `original` |
 | `--efeito-na-voz` | um efeito pronto ou seu (veja `--efeitos`), ou os ajustes: `"tom=9,eco=30"`; `nenhum` tira o do preset | |

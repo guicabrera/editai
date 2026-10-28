@@ -131,6 +131,10 @@ def argumentos() -> argparse.ArgumentParser:
     g.add_argument("--legenda", dest="estilo_da_legenda", choices=["classica", "destaques"],
                    help="classica (uma linha, karaokê) ou destaques (páginas de até 4 "
                         "palavras, cores e a frase de efeito numa pílula)")
+    g.add_argument("--cor-da-legenda", dest="cor_da_legenda", metavar="#RRGGBB",
+                   help="a cor da palavra dita na legenda clássica (padrão: branco)")
+    g.add_argument("--cor-do-destaque", dest="cor_do_destaque", metavar="#RRGGBB",
+                   help="a cor da palavra-chave na legenda clássica (padrão: amarelo)")
     g.add_argument("--texto-falado", type=Path, metavar="ARQUIVO",
                    help="o texto que você falou (.txt): a legenda pega a grafia dele onde ele "
                         'casa com o que o Whisper ouviu ("Editai", e não "edita aí")')
@@ -177,6 +181,9 @@ def argumentos() -> argparse.ArgumentParser:
     m.add_argument("--personagem-parado", type=Path, metavar="ANIMACAO",
                    help="um 2º GIF para as pausas da fala (boca fechada, piscando); padrão: "
                         "o 1º quadro do --personagem")
+    m.add_argument("--gestos", type=Path, metavar="PASTA",
+                   help="com --personagem: uma pasta com um GIF por gesto "
+                        "(cordeirinho_gesto_<nome>.gif); cada frase toca o gesto dela")
     m.add_argument("--marca", type=Path, metavar="PNG",
                    help="marca d'água (PNG com alfa) embaixo, no meio, por cima de tudo")
     m.add_argument("--marca-largura", type=float, default=0.3, metavar="FRACAO",
@@ -604,7 +611,7 @@ def _montagem(a: argparse.Namespace):
                     base_do_personagem=a.base_do_personagem,
                     personagem_parado=a.personagem_parado, marca=a.marca,
                     marca_largura=a.marca_largura,
-                    fundo_da_janela=a.fundo_da_janela), ""
+                    fundo_da_janela=a.fundo_da_janela, gestos=a.gestos), ""
 
 
 __all__ = ["argumentos", "main"]
