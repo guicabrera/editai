@@ -92,6 +92,8 @@ editai --formatos                                 # o que este computador grava
 | `--altura-do-personagem N` | altura do personagem ou da pessoa na tela, de 0 a 1 | `0.5` em pé |
 | `--base-do-personagem N` | onde fica a base dele, de 0 (topo) a 1 (embaixo); `0.8` fica logo acima da legenda | colado embaixo |
 | `--fundo-da-janela IMAGEM` | com `--janela`: esta imagem atrás da janela, no lugar da cena desfocada | |
+| `--gestos PASTA` | o personagem de gestos: um clipe por gesto (`gestos.json` + bocas), escolhido pela frase da legenda | |
+| `--direcao classica\|variada\|embaixo` | como o personagem anda: `variada` troca de lugar a cada ~4 s (em cima da janela, no foco e embaixo dela, com a janela subindo); `embaixo` deixa a janela no alto e o personagem grande embaixo, trocando de lado. Sem janela, as duas põem a pessoa em movimento mesmo sem cortes | `classica` |
 | `--marca PNG` | marca d'água (PNG com alfa) embaixo, no meio, por cima de tudo | |
 | `--marca-largura N` | a largura da marca, em fração da largura da tela | `0.3` |
 | `--avatar NOME` | o seu avatar (criado na página), por cima: a pose de cada frase e a boca nas sílabas | |
@@ -127,6 +129,8 @@ editai --formatos                                 # o que este computador grava
 | `--sem-navegador` | abre a interface sem abrir o navegador | |
 | `--formatos` | mostra os formatos e codecs que este computador grava | |
 | `--versao` | mostra a versão do Editai e sai | |
+
+**Variável de ambiente `EDITAI_CENA_S`** (fork `thelamb`): com a biblioteca de cenas, quantos segundos cada cena fica na tela (padrão `2.2`; cada foto passa a valer esse tempo + 0,4 s). O pipeline da The Lamb usa `3.2`.
 
 Os padrões da tabela são os do preset `padrao`. Com `--preset`, valem os do preset
 escolhido, e as flags passadas ganham dele. `editai --ajuda` mostra a mesma lista.

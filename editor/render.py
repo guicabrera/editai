@@ -625,9 +625,11 @@ def _editar_montagem(montagem: Montagem, destino: Path, edicao: OpcoesDeEdicao,
     falas = janela_mod.falas(f.no_editado)
     deitado = largura > altura * 1.2
     if edicao.janela:
-        planos = janela_mod.dirigir(linha.duracao, p.cartoes, p.zoom, deitado=deitado)
-        if not edicao.mover:
+        planos = janela_mod.dirigir(linha.duracao, p.cartoes, p.zoom, deitado=deitado,
+                                    direcao=edicao.direcao)
+        if not edicao.mover and edicao.direcao == "classica":
             # Parado: a janela e a câmera continuam, e o personagem fica no centro.
+            # (Uma direção pedida, "variada"/"embaixo", ganha do "mover" do preset.)
             planos = [janela_mod.Plano(x.t, x.janela, "centro", x.zoom, x.foco, x.prioridade)
                       for x in planos]
         montador = janela_mod.MontadorDeJanela(largura, altura, fundo=fundo,
@@ -636,7 +638,13 @@ def _editar_montagem(montagem: Montagem, destino: Path, edicao: OpcoesDeEdicao,
                                                fundo_fixo=_fundo_da_janela(montagem, largura,
                                                                            altura))
     else:
-        montador = Montador(montagem, p, largura, altura, info_do_fundo, mover=edicao.mover,
+        mover = edicao.mover
+        if edicao.direcao != "classica" and camada is not None and not p.movimentos:
+            # narração contínua não tem cortes, e sem corte a pessoa nunca saía do lugar
+            p.movimentos = movimentos_ritmados(linha.duracao, edicao.direcao,
+                                               vertical=altura > largura)
+            mover = True
+        montador = Montador(montagem, p, largura, altura, info_do_fundo, mover=mover,
                             fundo=fundo if na_saida else None, fundo_na_saida=na_saida,
                             camada=camada, falas=falas)
     legenda = Legenda(largura, altura, vertical=altura > largura,
@@ -705,3 +713,22 @@ def _marca(montagem, largura: int, altura: int):
     x = (largura - img.width) // 2
     y = round(altura * 0.965) - img.height
     return img, (x, y)
+
+
+#: As posições da pessoa (sem janela) quando a direção não é a clássica.
+RITMO_VARIADO = ("esquerda", "perto", "direita", "cima", "longe", "baixo")
+RITMO_EMBAIXO = ("baixo", "esquerda", "perto", "direita")
+
+
+def movimentos_ritmados(duracao: float, direcao: str, *, vertical: bool):
+    """Movimentos a cada ``janela.BATIDA_S`` (de ~3 s cada, voltando deslizando), para quando
+    o vídeo não tem cortes e a direção pede variedade."""
+    from editor.plano import Movimento
+    ordem = RITMO_EMBAIXO if direcao == "embaixo" else RITMO_VARIADO
+    saida, t, k = [], janela_mod.BATIDA_DO_COMECO_S, 0
+    while t + 2.0 < duracao - 1.5:
+        saida.append(Movimento(round(t, 3), round(min(t + 3.0, duracao - 1.5), 3),
+                               ordem[k % len(ordem)], False))
+        t += janela_mod.BATIDA_S
+        k += 1
+    return saida

@@ -29,6 +29,7 @@ import bisect
 import functools
 import json
 import math
+import os
 import re
 import unicodedata
 from collections import OrderedDict
@@ -47,7 +48,8 @@ VIDEOS = (".mp4", ".mov", ".m4v", ".webm", ".mkv")
 IMAGENS = (".jpg", ".jpeg", ".png", ".webp")
 EXTENSOES = VIDEOS + IMAGENS
 #: Uma foto vale por uma cena deste tamanho, e aproxima (ou afasta) 8% enquanto toca.
-FOTO_S = 3.0
+#: (EDITAI_CENA_S no ambiente muda o ritmo: cenas mais longas, uma foto fica mais na tela)
+FOTO_S = max(3.0, float(os.environ.get("EDITAI_CENA_S", 0)) + 0.4)
 FOTO_ZOOM = 0.08
 #: Mais diferente que isto (a proporção de uma pela da outra), a cena entra inteira, sobre
 #: ela mesma desfocada, em vez de cortada.
@@ -55,7 +57,7 @@ DIFERENCA_PARA_ENCAIXAR = 1.45
 #: Um bloco de fala dura de 2 a 6 s; uma cena, uns 2 s.
 BLOCO_MINIMO_S = 2.0
 BLOCO_MAXIMO_S = 6.0
-CENA_S = 2.2
+CENA_S = float(os.environ.get("EDITAI_CENA_S", 2.2))
 #: Uma pausa maior que isto também fecha um bloco.
 PAUSA_DO_BLOCO_S = 0.6
 #: No máximo esta quantidade de cenas "cuidado" por vídeo.

@@ -188,6 +188,10 @@ def argumentos() -> argparse.ArgumentParser:
                    help="marca d'água (PNG com alfa) embaixo, no meio, por cima de tudo")
     m.add_argument("--marca-largura", type=float, default=0.3, metavar="FRACAO",
                    help="largura da marca, em fração da largura da tela (padrão 0.3)")
+    m.add_argument("--direcao", dest="direcao", choices=["classica", "variada", "embaixo"],
+                   help="como o personagem anda: classica (só nos cartões e zooms), variada "
+                        "(troca de lugar a cada poucos segundos, também embaixo da janela) ou "
+                        "embaixo (janela no alto, personagem grande embaixo)")
     m.add_argument("--fundo-da-janela", type=Path, metavar="IMAGEM",
                    help="com --janela: esta imagem atrás da janela, no lugar da cena desfocada")
     m.add_argument("--altura-do-personagem", type=float, metavar="FRACAO",
