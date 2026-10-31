@@ -52,6 +52,12 @@ class OpcoesDeEdicao:
     #: Na montagem, a cena numa janela 16:9 com a câmera e o personagem na borda dela.
     #: Sem ela, o fundo encaixado de sempre.
     janela: bool = False
+    #: Como o personagem anda pela tela: "classica" (o diretor de sempre: muda com os cartões
+    #: e os zooms), "variada" (também troca de lugar a cada poucos segundos, inclusive embaixo
+    #: da janela, que sobe) ou "embaixo" (a janela no alto e o personagem grande embaixo,
+    #: trocando de lado). Sem janela, "variada"/"embaixo" põem a pessoa em movimento mesmo
+    #: sem cortes (uma narração contínua não tem cortes).
+    direcao: str = "classica"
     #: Os cartões animados (selo, lista, quadro, enquete, carimbo, destaque, flash),
     #: escritos pelo Gemini.
     animacoes: bool = False

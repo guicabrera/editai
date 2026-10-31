@@ -52,6 +52,18 @@ ZOOM_DA_LINHA = 1.08
 PLANO_MINIMO_S = 0.6
 #: Depois do momento forte, a câmera volta ao padrão.
 VOLTA_DO_FORTE_S = 1.6
+#: Na direção "variada"/"embaixo": de quanto em quanto tempo o personagem troca de lugar
+#: (quando nenhum cartão ou zoom já trocou), e a partir de quando.
+BATIDA_S = 4.2
+BATIDA_DO_COMECO_S = 2.6
+#: Os lugares embaixo da janela: o personagem pisa acima da marca d'água (em pé, num
+#: quadro de 1920 de altura), e a janela sobe para o "alto".
+PISO_DE_BAIXO = 190
+LUGARES_DE_BAIXO = ("baixo-esquerda", "baixo-direita", "baixo-centro")
+#: A sequência da direção "variada": alterna em cima da janela, embaixo dela e no foco.
+VARIADA = (("alto", "baixo-direita"), ("padrao", "esquerda"), ("alto", "baixo-esquerda"),
+           ("foco", "direita"), ("alto", "baixo-centro"), ("padrao", "direita"))
+EMBAIXO = ("baixo-direita", "baixo-esquerda")
 
 
 @dataclass(frozen=True)
@@ -81,8 +93,8 @@ class Plano:
     """Um plano de câmera, a partir do instante ``t``."""
 
     t: float
-    janela: str = "padrao"           # "padrao" ou "foco"
-    lugar: str = "centro"            # "centro", "esquerda" ou "direita"
+    janela: str = "padrao"           # "padrao", "foco" ou "alto" (sobe, e abre espaço embaixo)
+    lugar: str = "centro"            # "centro", "esquerda", "direita" ou "baixo-*"
     zoom: float = 1.0
     foco: tuple[float, float] | None = None
     prioridade: int = 0
@@ -102,8 +114,12 @@ class Geometria:
             # As medidas do chat: a janela de 608 em 640, ou de 960 em 400 no foco.
             self.janelas = {"padrao": (0, 640 * ky, largura, 608 * ky, 1290 * ky + 140 * ky),
                             "foco": (0, 400 * ky, largura, 960 * ky, 1385 * ky + 140 * ky)}
+            self.janelas["alto"] = (0, 300 * ky, largura, 608 * ky, (300 + 608 + 150) * ky)
             self.lugares = {"centro": (540 * kx, 600 * kx), "esquerda": (220 * kx, 400 * kx),
-                            "direita": (860 * kx, 400 * kx)}
+                            "direita": (860 * kx, 400 * kx),
+                            "baixo-esquerda": (330 * kx, 640 * kx),
+                            "baixo-direita": (750 * kx, 640 * kx),
+                            "baixo-centro": (540 * kx, 680 * kx)}
         elif self.formato == "quadrado":
             larg = largura * 0.92
             self.janelas = {"padrao": ((largura - larg) / 2, 0.34 * altura, larg,
@@ -120,6 +136,12 @@ class Geometria:
             self.lugares = {"centro": (0.82 * largura, 0.62 * altura),
                             "esquerda": (0.15 * largura, 0.45 * altura),
                             "direita": (0.85 * largura, 0.45 * altura)}
+        # Fora do em pé não há "embaixo da janela": o alto é o padrão, e os lugares de baixo
+        # são os de cima.
+        self.janelas.setdefault("alto", self.janelas["padrao"])
+        for lugar in LUGARES_DE_BAIXO:
+            self.lugares.setdefault(lugar, self.lugares[lugar.split("-")[1]
+                                                        if lugar != "baixo-centro" else "centro"])
         # O palco: o 16:9 na largura da janela padrão.
         _, _, lp, _, _ = self.janelas["padrao"]
         self.palco = (round(lp), round(lp * 9 / 16))
@@ -128,7 +150,12 @@ class Geometria:
         x, y, w, h, legenda = self.janelas[plano.janela]
         cx, tamanho = self.lugares[plano.lugar]
         fx, fy = plano.foco or (PALCO[0] / 2, PALCO[1] / 2)
-        piso = self.altura if self.formato == "deitado" else y + tamanho * ENFIADO
+        if self.formato == "deitado":
+            piso = self.altura
+        elif self.formato == "em_pe" and plano.lugar in LUGARES_DE_BAIXO:
+            piso = self.altura - PISO_DE_BAIXO * self.altura / 1920   # de pé, acima da marca
+        else:
+            piso = y + tamanho * ENFIADO
         return Estado(x, y, w, h, legenda, plano.zoom, fx, fy, cx, tamanho, piso)
 
 
@@ -165,7 +192,8 @@ class Direcao:
 
 
 def dirigir(duracao: float, cartoes: Sequence[cartoes_mod.Cartao],
-            zooms: Sequence[tuple[float, float]], *, deitado: bool = False) -> list[Plano]:
+            zooms: Sequence[tuple[float, float]], *, deitado: bool = False,
+            direcao: str = "classica") -> list[Plano]:
     """Os planos do vídeo, por regras (as do vídeo do chat):
 
     - o começo é foco, com o personagem à esquerda;
@@ -176,6 +204,10 @@ def dirigir(duracao: float, cartoes: Sequence[cartoes_mod.Cartao],
     - sem cartão, os zooms de ênfase do plano viram foco (com o personagem num canto) e
       padrão;
     - o fim é padrão, com o personagem no centro.
+
+    ``direcao`` "variada" acrescenta uma troca de lugar a cada ``BATIDA_S`` onde nada mais
+    trocou (passando também por baixo da janela, que sobe); "embaixo" deixa a janela no alto
+    e o personagem embaixo dela o vídeo todo, trocando de lado.
     """
     planos: list[Plano] = [Plano(0.0, "foco", "esquerda", prioridade=3)]
     lado = ["direita"]
@@ -223,8 +255,28 @@ def dirigir(duracao: float, cartoes: Sequence[cartoes_mod.Cartao],
             continue
         planos.append(Plano(t, "foco", canto(), prioridade=0) if nivel > 1.0
                       else Plano(t, "padrao", "centro", prioridade=0))
+    if direcao in ("variada", "embaixo") and not deitado:
+        t, k = BATIDA_DO_COMECO_S, 0
+        while t < duracao - 2.5:
+            livre = (not any(a0 <= t <= a1 for a0, a1 in ocupado)
+                     and all(abs(t - p.t) >= 1.0 for p in planos))
+            if livre:
+                if direcao == "embaixo":
+                    planos.append(Plano(t, "alto", EMBAIXO[k % len(EMBAIXO)], prioridade=1))
+                else:
+                    janela, lugar = VARIADA[k % len(VARIADA)]
+                    planos.append(Plano(t, janela, lugar, prioridade=1))
+                k += 1
+            t += BATIDA_S
     if duracao > 4:
-        planos.append(Plano(max(0.0, duracao - 2.0), "padrao", "centro", prioridade=1))
+        planos.append(Plano(max(0.0, duracao - 2.0), "alto" if direcao == "embaixo" else "padrao",
+                            "baixo-centro" if direcao == "embaixo" else "centro", prioridade=1))
+    if direcao == "embaixo" and not deitado:
+        # o vídeo todo com a janela no alto: os planos do diretor viram os lugares de baixo
+        planos = [p if p.janela == "alto" else
+                  Plano(p.t, "alto", {"esquerda": "baixo-esquerda", "direita": "baixo-direita"}
+                        .get(p.lugar, "baixo-centro"), p.zoom, p.foco, p.prioridade)
+                  for p in planos]
     if deitado:
         # Deitado, a janela não cresce: o foco é um empurrão leve da câmera.
         planos = [Plano(p.t, p.janela, p.lugar, p.zoom * (1.12 if p.janela == "foco" else 1),
