@@ -8,11 +8,16 @@ import pytest
 from PIL import Image
 
 from editor.montagem import (
+    CamadaDeDueto,
     CamadaDeGestos,
+    Fala,
     Clipe,
     Montagem,
     PersonagemInvalido,
+    ler_falas,
     ler_gestos,
+    regras_dos_gestos,
+    trilha_das_falas,
     trilha_de_gestos,
 )
 
@@ -131,3 +136,45 @@ def test_termos_entre_aspas_viram_dica_do_whisper():
     texto = ('Você sabe o que significa "whaddya"? Tipo uót du iu. Fica "whaddya". '
              'Exemplo: "Whaddya think?" Repete: “whaddya”!')
     assert termos_entre_aspas(texto) == ["whaddya", "Whaddya think"]
+
+
+def test_trilha_com_as_regras_do_personagem():
+    clipes = {"ouvindo": 1, "confiante": 1, "rindo": 1}
+    poses = [(0, 2, "apontando_voce"), (2, 4, "rindo")]
+    assert trilha_de_gestos(poses, clipes, {"apontando_voce": "confiante"}, "rindo") == [
+        (0, 2, "confiante"), (2, 4, "rindo")]
+
+
+def test_regras_do_gestos_json_e_base_propria(tmp_path):
+    (tmp_path / "gestos.json").write_text(json.dumps(
+        {"fps": 12, "gestos": {}, "bocas": {}, "regras": {"base": "parado"}}))
+    r = regras_dos_gestos(tmp_path)
+    assert r["base"] == "parado" and r["despedida"] == "acenando"
+    with pytest.raises(PersonagemInvalido, match="parado"):
+        ler_gestos(tmp_path)
+
+
+def test_falas_escolhem_o_gesto_marcado_e_a_despedida(tmp_path):
+    arq = tmp_path / "falas.json"
+    arq.write_text(json.dumps([{"inicio": 2, "fim": 4, "quem": 1},
+                               {"inicio": 0, "fim": 2, "quem": 0, "gesto": "apontando"},
+                               {"inicio": 4, "fim": 6, "quem": 0}]))
+    falas = ler_falas(arq)
+    assert [f.quem for f in falas] == [0, 1, 0]
+    clipes = {"ouvindo": 1, "apontando": 1, "acenando": 1}
+    assert trilha_das_falas(falas, 0, clipes, despedida="acenando") == [
+        (0, 2, "apontando"), (4, 6, "acenando")]
+    # sem marca, o gesto da pose da frase
+    assert trilha_das_falas(falas, 1, clipes, [(2, 4, "apontando")]) == [(2, 4, "apontando")]
+
+
+def test_dueto_so_quem_fala_mexe_a_boca():
+    falas = [Fala(0, 1, 0), Fala(1, 2, 1)]
+    a, b = _camada([(0, 1, None)]), _camada([(1, 2, None)])
+    d = CamadaDeDueto([a, b], falas, espaco=0.0)
+    assert (d.largura, d.altura) == (40, 20)            # os quadros de teste são cheios
+    d.bocas, d.fps_do_video = ["aberta", "aberta"], 1.0
+    q0, q1 = d.rgba_falando(0.0), d.rgba_falando(1.0)
+    assert q0[8, 9, 0] == 3 and q0[8, 29, 0] == 1       # o 1º fala, o 2º de boca fechada
+    assert q1[8, 9, 0] == 1 and q1[8, 29, 0] == 3       # e depois o contrário
+    assert d.quem_em(5.0) == 1                            # na pausa, quem falou por último

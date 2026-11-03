@@ -38,12 +38,17 @@ from editor import video as video_mod
 from editor.legenda import Legenda
 from editor.montagem import (
     CamadaDeAvatar,
+    CamadaDeDueto,
     CamadaDeGestos,
+    Fala,
     Montador,
     Montagem,
     camada_da_montagem,
+    ler_falas,
     ler_gestos,
+    regras_dos_gestos,
     tamanho_do_quadro,
+    trilha_das_falas,
     trilha_de_gestos,
 )
 from editor.opcoes import OpcoesDeEdicao
@@ -610,10 +615,25 @@ def _editar_montagem(montagem: Montagem, destino: Path, edicao: OpcoesDeEdicao,
         camada = CamadaDeAvatar.do_avatar(montagem.avatar, avatar_mod.poses_das_falas(p.blocos),
                                           bocas, float(fps))
     elif montagem.gestos is not None:
-        # um clipe por gesto, pela pose de cada frase da legenda
-        clipes, bocas_dos_gestos, fps_dos_gestos = ler_gestos(montagem.gestos)
-        camada = CamadaDeGestos(clipes, bocas_dos_gestos, fps_dos_gestos, trilha_de_gestos(
-            avatar_mod.poses_das_falas(p.blocos), clipes))
+        # um clipe por gesto, pela pose de cada frase da legenda (ou pelas falas do roteiro:
+        # quem fala e o gesto marcado); com dois personagens, lado a lado
+        poses = avatar_mod.poses_das_falas(p.blocos)
+        falas = []
+        if montagem.falas is not None:
+            for x in ler_falas(montagem.falas):
+                a0, a1 = linha.prender(x.inicio), linha.prender(x.fim)
+                if a1 > a0:
+                    falas.append(Fala(a0, a1, x.quem, x.gesto))
+        camadas = []
+        for k, pasta in enumerate(g for g in (montagem.gestos, montagem.gestos_2) if g):
+            clipes, bocas_dos_gestos, fps_dos_gestos = ler_gestos(pasta)
+            regras = regras_dos_gestos(pasta)
+            da_pose = trilha_de_gestos(poses, clipes, regras["da_pose"], regras["despedida"])
+            trilha = (trilha_das_falas(falas, k, clipes, da_pose, regras["despedida"])
+                      if falas else da_pose)
+            camadas.append(CamadaDeGestos(clipes, bocas_dos_gestos, fps_dos_gestos, trilha,
+                                          base=regras["base"], despedida=regras["despedida"]))
+        camada = camadas[0] if len(camadas) == 1 else CamadaDeDueto(camadas, falas)
         # a boca de cada quadro pelas sílabas da voz cortada (como no avatar)
         total = max(1, round(linha.duracao * float(fps)))
         camada.bocas = (avatar_mod.bocas_por_quadro(voz_cortada(f.audio, linha),

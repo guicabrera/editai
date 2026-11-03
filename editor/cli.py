@@ -181,9 +181,14 @@ def argumentos() -> argparse.ArgumentParser:
     m.add_argument("--personagem-parado", type=Path, metavar="ANIMACAO",
                    help="um 2º GIF para as pausas da fala (boca fechada, piscando); padrão: "
                         "o 1º quadro do --personagem")
-    m.add_argument("--gestos", type=Path, metavar="PASTA",
-                   help="com --personagem: uma pasta com um GIF por gesto "
-                        "(cordeirinho_gesto_<nome>.gif); cada frase toca o gesto dela")
+    m.add_argument("--gestos", type=Path, metavar="PASTA", action="append",
+                   help="com --personagem: uma pasta de gestos preparada (gestos.json); "
+                        "cada frase toca o gesto dela. Duas vezes: um diálogo de dois "
+                        "personagens lado a lado (vai com --falas)")
+    m.add_argument("--falas", type=Path, metavar="ARQUIVO",
+                   help='com --gestos: um JSON [{"inicio", "fim", "quem": 0|1, "gesto"}] no '
+                        "tempo do áudio: quem fala cada trecho (a boca e os gestos) e o gesto "
+                        "marcado no roteiro")
     m.add_argument("--marca", type=Path, metavar="PNG",
                    help="marca d'água (PNG com alfa) embaixo, no meio, por cima de tudo")
     m.add_argument("--marca-largura", type=float, default=0.3, metavar="FRACAO",
@@ -606,6 +611,10 @@ def _montagem(a: argparse.Namespace):
     recorte = a.recorte
     if pessoa is not None and recorte is None:
         recorte = "transparente" if video_mod.tem_alfa(pessoa) else "modnet"
+    if a.gestos and len(a.gestos) > 2:
+        return None, "no máximo dois personagens (--gestos duas vezes)"
+    if a.falas is not None and not a.falas.is_file():
+        return None, f"não achei as falas: {a.falas}"
     return Montagem(a.fundo, pessoa=pessoa, personagem=a.personagem, avatar=avatar,
                     audios=tuple(audios),
                     cenas=a.cenas, matriz=a.matriz,
@@ -615,7 +624,10 @@ def _montagem(a: argparse.Namespace):
                     base_do_personagem=a.base_do_personagem,
                     personagem_parado=a.personagem_parado, marca=a.marca,
                     marca_largura=a.marca_largura,
-                    fundo_da_janela=a.fundo_da_janela, gestos=a.gestos), ""
+                    fundo_da_janela=a.fundo_da_janela,
+                    gestos=a.gestos[0] if a.gestos else None,
+                    gestos_2=a.gestos[1] if a.gestos and len(a.gestos) > 1 else None,
+                    falas=a.falas), ""
 
 
 __all__ = ["argumentos", "main"]

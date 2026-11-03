@@ -134,6 +134,10 @@ class Montagem:
     #: Uma pasta de gestos do personagem (``cordeirinho_gesto_<nome>.gif``): cada frase
     #: toca o gesto da pose dela (aulas e vídeos longos). Vai junto com o ``personagem``.
     gestos: Path | None = None
+    #: O 2º personagem do diálogo (outra pasta de gestos), ao lado do 1º; vai com ``falas``.
+    gestos_2: Path | None = None
+    #: As falas do roteiro (:func:`ler_falas`): quem fala cada trecho e o gesto marcado.
+    falas: Path | None = None
 
     def problemas(self) -> list[str]:
         erros = []
@@ -145,6 +149,10 @@ class Montagem:
             erros.append("por cima vai o vídeo da pessoa, um personagem ou o avatar, um só")
         if self.gestos is not None and self.personagem is None:
             erros.append("os gestos vão com o personagem (o GIF falando)")
+        if self.gestos_2 is not None and (self.gestos is None or self.falas is None):
+            erros.append("o 2º personagem vai com os gestos do 1º e as falas (quem fala quando)")
+        if self.falas is not None and self.gestos is None:
+            erros.append("as falas vão com os gestos")
         if self.fundo is None and self.fala == "fundo":
             erros.append("as cenas da biblioteca não têm som: o áudio vem de um áudio "
                          "separado ou do vídeo da pessoa")
@@ -454,6 +462,9 @@ class Clipe:
     entrada: int
     sustenta: tuple[int, int]
     fim: int
+    #: O elenco: os mesmos quadros com a própria boca deformada (forma → quadros); com
+    #: elas, a boca é trocada de quadro em vez de colada por cima.
+    formas: dict[str, list[np.ndarray]] | None = None
 
 
 def _ler_gif(caminho: Path) -> list[np.ndarray]:
@@ -476,10 +487,13 @@ def ler_gestos(pasta: Path) -> tuple[dict[str, Clipe], dict[str, tuple], float]:
     info = json.loads(arq.read_text(encoding="utf-8"))
     clipes = {}
     for nome, g in info["gestos"].items():
+        formas = ({f: _ler_gif(pasta / arq) for f, arq in g["formas"].items()}
+                  if g.get("formas") else None)
         clipes[nome] = Clipe(_ler_gif(pasta / g["arquivo"]), [tuple(n) for n in g["narizes"]],
-                             g["entrada"][1], tuple(g["sustenta"]), g["saida"][1])
-    if GESTO_BASE not in clipes:
-        raise PersonagemInvalido(f"A pasta de gestos precisa do gesto “{GESTO_BASE}”.")
+                             g["entrada"][1], tuple(g["sustenta"]), g["saida"][1], formas)
+    base = _regras(info)["base"]
+    if base not in clipes:
+        raise PersonagemInvalido(f"A pasta de gestos precisa do gesto “{base}”.")
     if len({c.quadros[0].shape for c in clipes.values()}) > 1:
         raise PersonagemInvalido("Os gestos precisam ter todos o mesmo tamanho.")
     bocas = {forma: (np.asarray(Image.open(pasta / b["arquivo"]).convert("RGBA")),
@@ -487,15 +501,70 @@ def ler_gestos(pasta: Path) -> tuple[dict[str, Clipe], dict[str, tuple], float]:
     return clipes, bocas, float(info["fps"])
 
 
-def trilha_de_gestos(poses: Sequence[tuple[float, float, str]], gestos: dict
+def _regras(info: dict) -> dict:
+    r = info.get("regras") or {}
+    return {"base": r.get("base", GESTO_BASE),
+            "despedida": r.get("despedida", GESTO_DE_DESPEDIDA),
+            "da_pose": r.get("da_pose", GESTO_DA_POSE)}
+
+
+def regras_dos_gestos(pasta: Path) -> dict:
+    """As regras do personagem, do ``regras`` do ``gestos.json`` (que vem do ``config.json``
+    dele): ``base`` (o gesto entre os outros), ``despedida`` (o da última frase) e
+    ``da_pose`` (pose da frase → gesto). Sem elas, as do Cordeirinho."""
+    return _regras(json.loads((Path(pasta) / "gestos.json").read_text(encoding="utf-8")))
+
+
+def trilha_de_gestos(poses: Sequence[tuple[float, float, str]], gestos: dict,
+                     da_pose: dict | None = None, despedida: str = GESTO_DE_DESPEDIDA
                      ) -> list[tuple[float, float, str | None]]:
-    """``(início, fim, gesto)`` de cada frase: a pose dela pelo :data:`GESTO_DA_POSE`, a
-    última com o aceno; sem gesto (ou sem o clipe dele), ``None``."""
+    """``(início, fim, gesto)`` de cada frase: a pose dela pelo ``da_pose`` (padrão:
+    :data:`GESTO_DA_POSE`), a última com a ``despedida``; sem gesto (ou sem o clipe dele),
+    ``None``."""
+    da_pose = GESTO_DA_POSE if da_pose is None else da_pose
     trilha = []
     for k, (a0, a1, pose) in enumerate(poses):
-        gesto = (GESTO_DE_DESPEDIDA if k == len(poses) - 1 and k > 0
-                 else GESTO_DA_POSE.get(pose))
+        gesto = (despedida if k == len(poses) - 1 and k > 0 else da_pose.get(pose))
         trilha.append((a0, a1, gesto if gesto in gestos else None))
+    return trilha
+
+
+@dataclass
+class Fala:
+    """Uma fala do diálogo (``--falas``): de quem é (0 ou 1, a ordem dos ``--gestos``) e,
+    se o roteiro marcou, o gesto dela (``[confiante]``). Tempos no áudio original."""
+
+    inicio: float
+    fim: float
+    quem: int = 0
+    gesto: str | None = None
+
+
+def ler_falas(arquivo: Path) -> list[Fala]:
+    """As falas de um JSON: ``[{"inicio", "fim", "quem", "gesto"}, ...]``."""
+    dados = json.loads(Path(arquivo).read_text(encoding="utf-8"))
+    falas = [Fala(float(d["inicio"]), float(d["fim"]), int(d.get("quem", 0)),
+                  d.get("gesto") or None) for d in dados]
+    return sorted(falas, key=lambda f: f.inicio)
+
+
+def trilha_das_falas(falas: Sequence[Fala], quem: int, gestos: dict,
+                     da_pose_trilha: Sequence[tuple[float, float, str | None]] = (),
+                     despedida: str | None = None) -> list[tuple[float, float, str | None]]:
+    """A trilha de um personagem no diálogo: só as falas dele. O gesto é o marcado no
+    roteiro; sem marca, o da pose da frase que cai no meio da fala; a última fala do vídeo
+    (sem marca) leva a ``despedida``. Tempos já na saída."""
+    trilha = []
+    for k, f in enumerate(falas):
+        if f.quem != quem:
+            continue
+        gesto = f.gesto
+        if gesto is None and k == len(falas) - 1 and k > 0:
+            gesto = despedida
+        if gesto is None:
+            meio = (f.inicio + f.fim) / 2
+            gesto = next((g for a0, a1, g in da_pose_trilha if a0 <= meio < a1), None)
+        trilha.append((f.inicio, f.fim, gesto if gesto in gestos else None))
     return trilha
 
 
@@ -536,13 +605,15 @@ class CamadaDeGestos(Camada):
     - a boca é sempre a das sílabas do áudio (``bocas``), colada no nariz do quadro."""
 
     def __init__(self, clipes: dict[str, Clipe], bocas: dict[str, tuple], fps: float,
-                 trilha: Sequence[tuple[float, float, str | None]]):
+                 trilha: Sequence[tuple[float, float, str | None]], *,
+                 base: str = GESTO_BASE, despedida: str = GESTO_DE_DESPEDIDA):
         self.clipes, self.bocas_de, self.fps = clipes, bocas, fps
+        self.base, self.despedida = base, despedida
         self.trilha = list(trilha)
         self.bocas: list[str] = []          # a boca de cada quadro do vídeo (render.py)
         self.fps_do_video = 30.0
         self.toques = self._toques()
-        base = clipes[GESTO_BASE].quadros[0]
+        base = clipes[self.base].quadros[0]
         self.altura, self.largura = base.shape[:2]
         self._medir([q[..., 3].astype(np.float32) / 255.0
                      for c in clipes.values() for q in c.quadros[::12]])
@@ -553,7 +624,7 @@ class CamadaDeGestos(Camada):
         frases = list(self.trilha)
         # a despedida tem a vez: começa com a última frase, e gesto que ainda estaria
         # tocando nessa hora fica de fora (senão o aceno caía depois do fim do vídeo)
-        despedida = (frases[-1][0] if frases and frases[-1][2] == GESTO_DE_DESPEDIDA
+        despedida = (frases[-1][0] if frases and frases[-1][2] == self.despedida
                      else float("inf"))
         i = 0
         while i < len(frases):
@@ -567,13 +638,13 @@ class CamadaDeGestos(Camada):
                 continue
             c = self.clipes[gesto]
             ini = max(a0, livre)
-            if ini > a0 and a1 - ini < SOBRA_MINIMA_S and gesto != GESTO_DE_DESPEDIDA:
+            if ini > a0 and a1 - ini < SOBRA_MINIMA_S and gesto != self.despedida:
                 continue
             lado = max(1, c.sustenta[1] - c.sustenta[0])
             quer = (a1 - ini) * self.fps - c.entrada - (c.fim - c.sustenta[1])
             voltas = max(1, 2 * round((quer / lado - 1) / 2) + 1)    # ímpar, perto do que cabe
             t = Toque(ini, gesto, voltas)
-            if gesto != GESTO_DE_DESPEDIDA and t.tempos(c, self.fps)[2] > despedida:
+            if gesto != self.despedida and t.tempos(c, self.fps)[2] > despedida:
                 continue
             toques.append(t)
             livre = t.tempos(c, self.fps)[2]
@@ -593,7 +664,7 @@ class CamadaDeGestos(Camada):
         # a base: a respiração, contada do fim do último gesto (que acabou no repouso)
         fim = max((tq.tempos(self.clipes[tq.gesto], self.fps)[2] for tq in self.toques
                    if tq.tempos(self.clipes[tq.gesto], self.fps)[2] <= t), default=0.0)
-        c = self.clipes[GESTO_BASE]
+        c = self.clipes[self.base]
         return c, _vai_e_volta(c.entrada, (t - fim) * self.fps)
 
     def boca_em(self, t: float, falando: bool) -> str:
@@ -603,8 +674,11 @@ class CamadaDeGestos(Camada):
 
     def rgba_falando(self, t_saida: float, falando: bool = True) -> np.ndarray:
         c, k = self._quadro_do_gesto(t_saida)
+        boca = self.boca_em(t_saida, falando)
+        if c.formas is not None:            # a própria boca, deformada no quadro
+            return (c.formas[boca] if boca in c.formas else c.quadros)[k]
         q = c.quadros[k].copy()
-        spr, dx, dy = self.bocas_de[self.boca_em(t_saida, falando)]
+        spr, dx, dy = self.bocas_de[boca]
         nx, ny = c.narizes[k]
         x0, y0 = nx + dx, ny + dy
         h, w = spr.shape[:2]
@@ -615,6 +689,77 @@ class CamadaDeGestos(Camada):
 
     def rgba(self, t_origem: float, t_saida: float) -> np.ndarray:
         return self.rgba_falando(t_saida)
+
+class CamadaDeDueto(CamadaDeGestos):
+    """Dois personagens de gestos lado a lado, numa camada só (a janela e a câmera os tratam
+    como um): quem fala (pelas ``falas``, já no tempo de saída) mexe a boca pelas sílabas e
+    faz os gestos dele; o outro fica de boca fechada, na base ou no gesto marcado dele.
+
+    Os clipes do elenco saem todos no mesmo quadro (640×360, o personagem com a mesma
+    altura), então basta pô-los um ao lado do outro, rentes à base: cada um ocupa só a
+    largura em que ele aparece (a união dos gestos dele), com ``espaco`` (fração da altura)
+    entre os dois."""
+
+    def __init__(self, camadas: Sequence[CamadaDeGestos], falas: Sequence[Fala],
+                 espaco: float = 0.04):
+        self.camadas = list(camadas)
+        self.falas = sorted(falas, key=lambda f: f.inicio)
+        self.bocas = []
+        self.fps_do_video = 30.0
+        self._divididas: tuple | None = None
+        self.altura = max(c.altura for c in self.camadas)
+        vao = round(espaco * self.altura)
+        # onde cada um começa na tela: o quadro dele deslocado para a silhueta encostar no vão
+        self.origens, x = [], 0
+        for c in self.camadas:
+            x0, x1 = int(c.pessoa.x0 * c.largura), int(np.ceil(c.pessoa.x1 * c.largura))
+            self.origens.append(x - x0)
+            x += x1 - x0 + vao
+        self.largura = x - vao
+        alfas = []
+        for t in np.linspace(0, max([f.fim for f in self.falas] or [1.0]), 8):
+            alfas.append(self._juntar([c.rgba_falando(t, False) for c in self.camadas]
+                                      )[..., 3].astype(np.float32) / 255.0)
+        self._medir(alfas)
+
+    def quem_em(self, t: float) -> int:
+        """Quem está com a palavra em ``t`` (nas pausas, quem falou por último)."""
+        quem = self.falas[0].quem if self.falas else 0
+        for f in self.falas:
+            if f.inicio > t:
+                break
+            quem = f.quem
+        return quem
+
+    def _juntar(self, quadros: Sequence[np.ndarray]) -> np.ndarray:
+        tela = np.zeros((self.altura, self.largura, 4), np.uint8)
+        for q, ox in zip(quadros, self.origens):
+            h, w = q.shape[:2]
+            a0, a1 = max(0, -ox), min(w, self.largura - ox)    # a parte do quadro que cabe
+            if a1 <= a0:
+                continue
+            y0 = self.altura - h
+            area = tela[y0:y0 + h, ox + a0:ox + a1]
+            parte = q[:, a0:a1]
+            tela[y0:y0 + h, ox + a0:ox + a1] = np.where(parte[..., 3:] > 0, parte, area)
+        return tela
+
+    def _dividir(self) -> None:
+        """A boca das sílabas vai para quem fala; o outro, de boca fechada."""
+        chave = (id(self.bocas), len(self.bocas), self.fps_do_video)
+        if self._divididas == chave:
+            return
+        for i, c in enumerate(self.camadas):
+            c.fps_do_video = self.fps_do_video
+            c.bocas = [b if self.quem_em(k / self.fps_do_video) == i else "fechada"
+                       for k, b in enumerate(self.bocas)]
+        self._divididas = chave
+
+    def rgba_falando(self, t_saida: float, falando: bool = True) -> np.ndarray:
+        self._dividir()
+        quem = self.quem_em(t_saida)
+        return self._juntar([c.rgba_falando(t_saida, falando and i == quem)
+                             for i, c in enumerate(self.camadas)])
 
 
 #: O pulinho ao trocar de pose (o do Telexplica): cresce de 0,95 a 1 neste tempo.
@@ -922,8 +1067,8 @@ class Montador:
 
 
 __all__ = ["FALAS", "FORMATOS", "RECORTES", "Camada", "CamadaComAlfa", "CamadaDeAvatar",
-           "CamadaDeGestos", "CamadaDePersonagem", "GESTO_DA_POSE",
+           "CamadaDeDueto", "CamadaDeGestos", "CamadaDePersonagem", "Fala", "GESTO_DA_POSE",
            "CamadaRecortada", "Montador", "Montagem", "Personagem", "PersonagemInvalido",
            "alvo", "camada_da_montagem", "casa", "cor_do_fundo", "encaixe", "falando",
-           "ler_gestos", "ler_personagem", "sobras", "trilha_de_gestos",
+           "ler_falas", "ler_gestos", "ler_personagem", "regras_dos_gestos", "trilha_das_falas", "sobras", "trilha_de_gestos",
            "tamanho_do_quadro", "tirar_fundo_de_cor"]
