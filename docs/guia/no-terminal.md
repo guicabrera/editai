@@ -111,7 +111,8 @@ editai --formatos                                 # o que este computador grava
 | `--altura-do-personagem N` | altura do personagem ou da pessoa na tela, de 0 a 1 | `0.5` em pé |
 | `--base-do-personagem N` | onde fica a base dele, de 0 (topo) a 1 (embaixo); `0.8` fica logo acima da legenda | colado embaixo |
 | `--fundo-da-janela IMAGEM` | com `--janela`: esta imagem atrás da janela, no lugar da cena desfocada | |
-| `--gestos PASTA` | o personagem de gestos: um clipe por gesto (`gestos.json` + bocas), escolhido pela frase da legenda | |
+| `--gestos PASTA` | o personagem de gestos: um clipe por gesto (`gestos.json` + bocas), escolhido pela frase da legenda. Duas vezes: dois personagens lado a lado (com `--falas`) | |
+| `--falas ARQUIVO` | quem fala cada trecho do áudio e o gesto marcado: `[{"inicio", "fim", "quem": 0\|1, "gesto"}]`. Só quem fala mexe a boca | |
 | `--direcao classica\|variada\|embaixo` | como o personagem anda: `variada` troca de lugar a cada ~4 s (em cima da janela, no foco e embaixo dela, com a janela subindo); `embaixo` deixa a janela no alto e o personagem grande embaixo, trocando de lado. Sem janela, as duas põem a pessoa em movimento mesmo sem cortes | `classica` |
 | `--marca PNG` | marca d'água (PNG com alfa) embaixo, no meio, por cima de tudo | |
 | `--marca-largura N` | a largura da marca, em fração da largura da tela | `0.3` |

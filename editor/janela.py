@@ -64,6 +64,8 @@ LUGARES_DE_BAIXO = ("baixo-esquerda", "baixo-direita", "baixo-centro")
 VARIADA = (("alto", "baixo-direita"), ("padrao", "esquerda"), ("alto", "baixo-esquerda"),
            ("foco", "direita"), ("alto", "baixo-centro"), ("padrao", "direita"))
 EMBAIXO = ("baixo-direita", "baixo-esquerda")
+#: Com dois personagens lado a lado (CamadaDeDueto), a folga até a borda da tela.
+MARGEM_DO_DUETO = 24
 
 
 @dataclass(frozen=True)
@@ -424,7 +426,8 @@ class MontadorDeJanela:
                     t_saida: float) -> None:
         if self.camada is None:
             return
-        from editor.montagem import CamadaDeAvatar, CamadaDeGestos, CamadaDePersonagem
+        from editor.montagem import (CamadaDeAvatar, CamadaDeDueto, CamadaDeGestos,
+                                     CamadaDePersonagem)
 
         if isinstance(self.camada, CamadaDeGestos):
             rgba = self.camada.rgba_falando(t_saida, self.falando(t_saida))
@@ -447,12 +450,21 @@ class MontadorDeJanela:
         s = max(1.0, tamanho) * 0.9 / visivel
         balanco = math.sin(t_saida * 6) * BALANCO * k if self.falando(t_saida) else 0.0
         dy = balanco - pulo * PULO * k
+        largo = isinstance(self.camada, CamadaDeDueto)
+        margem = MARGEM_DO_DUETO * k
+        if largo:
+            # dois lado a lado: a dupla inteira cabe na largura da tela
+            s = min(s, (tela.width - 2 * margem) / max(1.0, (p.x1 - p.x0) * lc))
         img = Image.fromarray(rgba, "RGBA")
         img = img.resize((max(1, round(lc * s)), max(1, round(ac * s))),
                          getattr(self.camada, "filtro", Image.BILINEAR))
         sombra = _sombra_do_personagem(img, k)
         # o centro da silhueta em cx, e a base dela no piso
-        cx = estado.cx - ((p.x0 + p.x1) / 2 - 0.5) * img.width
+        centro = estado.cx
+        if largo:   # num canto, a dupla é puxada para dentro, sem cortar ninguém na borda
+            meia = (p.x1 - p.x0) * img.width / 2
+            centro = min(max(centro, margem + meia), tela.width - margem - meia)
+        cx = centro - ((p.x0 + p.x1) / 2 - 0.5) * img.width
         base = estado.piso - p.y1 * img.height
         cy = base + img.height / 2 + dy
         giro = pulo * GIRO_DO_PULO
