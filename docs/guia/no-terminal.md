@@ -29,6 +29,7 @@ editai --cenas imovel/ --matriz imovel/cenas.json --audio imovel/tour-1.mp4 imov
 editai --cenas cenas/ --matriz cenas/cenas.json --audio p1.m4a p2.m4a p3.m4a \
        --personagem boneco.gif --preset noticia --quadro vertical
 editai video.mp4 --voz limpa --bipe "palavra, outra"  # voz limpa e bipe na lista
+editai video.mp4 --imagem realce --resolucao 1080p  # o vídeo do celular com cor, nitidez e em 1080p
 editai video.mp4 --efeito-na-voz esquilo           # a voz de esquilo (veja --efeitos)
 editai video.mp4 --efeito-na-voz "tom=-5,sala=40"  # ou os ajustes, do seu jeito
 editai --instalar-voz                             # a voz sintetizada (Minha voz), ~3,5 GB
@@ -77,6 +78,7 @@ editai --formatos                                 # o que este computador grava
 | `--cor-do-destaque` | a cor da palavra-chave na legenda clássica (`#RRGGBB`) | amarelo |
 | `--texto-falado ARQUIVO` | o texto que você falou (.txt): a legenda pega a grafia dele | |
 | `--voz` | `original`, `limpa` ou `estudio` | `original` |
+| `--imagem` | `original` ou `realce` (a gravação: níveis, contraste, cor e nitidez; com `--resolucao`, a gravação pequena sobe até ela) | `original` |
 | `--efeito-na-voz` | um efeito pronto ou seu (veja `--efeitos`), ou os ajustes: `"tom=9,eco=30"`; `nenhum` tira o do preset | |
 | `--efeitos` | mostra os efeitos na voz, os prontos e os seus, com os ajustes | |
 | `--bipe PALAVRAS` | as palavras proibidas, separadas por vírgula | |
