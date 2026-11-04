@@ -125,6 +125,9 @@ def argumentos() -> argparse.ArgumentParser:
                         "sílaba vira bipe na voz e asteriscos na legenda")
     g.add_argument("--voz", choices=["original", "limpa", "estudio"],
                    help="o tratamento da voz (padrão: original)")
+    g.add_argument("--imagem", choices=["original", "realce"],
+                   help="o tratamento da imagem da gravação: realce estica os níveis, dá cor "
+                        "e nitidez (padrão: original)")
     g.add_argument("--efeito-na-voz", dest="efeito_da_voz", type=_efeito, metavar="EFEITO",
                    help='um efeito pronto ou seu (veja --efeitos), ou os ajustes: '
                         '"tom=9,eco=30"; "nenhum" tira o do preset')

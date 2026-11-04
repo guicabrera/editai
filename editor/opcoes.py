@@ -66,6 +66,8 @@ class OpcoesDeEdicao:
     bipe: str = ""
     #: O tratamento da voz: "original", "limpa" ou "estudio".
     voz: str = "original"
+    #: O tratamento da imagem da gravação: "original" ou "realce" (:mod:`editor.imagem`).
+    imagem: str = "original"
     #: O efeito na voz, como texto: "tom=9,coral=20" (ver :mod:`editor.efeitos_da_voz`).
     #: Vazio, nenhum.
     efeito_da_voz: str = ""
@@ -116,6 +118,9 @@ class OpcoesDeEdicao:
             erros.append(f"estilo de legenda desconhecido: {self.estilo_da_legenda} "
                          f"(use {', '.join(plano.ESTILOS_DA_LEGENDA)})")
 
+        from editor import imagem
+        if self.imagem not in imagem.NIVEIS:
+            erros.append(f"imagem desconhecida: {self.imagem} (use {', '.join(imagem.NIVEIS)})")
         if self.voz not in voz.NIVEIS:
             erros.append(f"voz desconhecida: {self.voz} (use {', '.join(voz.NIVEIS)})")
         from editor import efeitos_da_voz
