@@ -134,6 +134,9 @@ def argumentos() -> argparse.ArgumentParser:
     g.add_argument("--ruido", choices=["auto", "leve", "forte", "nao"],
                    help="o ruído do fundo (o DeepFilterNet3, baixado com o seu ok): auto mede e "
                         "só tira quando há ruído; leve deixa a voz mais natural (padrão: auto)")
+    g.add_argument("--imagem", choices=["original", "realce"],
+                   help="o tratamento da imagem da gravação: realce estica os níveis, dá cor "
+                        "e nitidez (padrão: original)")
     g.add_argument("--efeito-na-voz", dest="efeito_da_voz", type=_efeito, metavar="EFEITO",
                    help='um efeito pronto ou seu (veja --efeitos), ou os ajustes: '
                         '"tom=9,eco=30"; "nenhum" tira o do preset')

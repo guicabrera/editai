@@ -18,6 +18,7 @@ from PIL import Image
 
 from editor import avatar as avatar_mod
 from editor import cartoes as cartoes_mod
+from editor import imagem as imagem_mod
 from editor import (
     cenas,
     censura,
@@ -587,7 +588,7 @@ def editar(entrada: Path | None, destino: Path, edicao: OpcoesDeEdicao,
     linha, p, duracao, som_final = f.linha, f.plano, f.duracao, f.som
 
     largura, altura = saida_mod.tamanho(info.largura, info.altura, saida_r.resolucao,
-                                        saida_r.formato)
+                                        saida_r.formato, aumentar=edicao.imagem == "realce")
     fps = saida_mod.fps_de_saida(info.fps, saida_r.fps, saida_r.formato)
     legenda = Legenda(largura, altura, vertical=info.vertical, tamanho=edicao.tamanho_legenda,
                       cor_dita=edicao.cor_da_legenda, cor_chave=edicao.cor_do_destaque)
@@ -599,9 +600,12 @@ def editar(entrada: Path | None, destino: Path, edicao: OpcoesDeEdicao,
         if som_final is not None:
             gravador.preparar_audio(som_final)
         ultimo = None
+        tratar = imagem_mod.tratamento(edicao.imagem)
         for t_src, matriz in video_mod.quadros(entrada, info.rotacao):
             if t_src > duracao:
                 break
+            if tratar is not None and linha.para_saida(t_src) is not None:
+                matriz = tratar(matriz)
             t_out = linha.para_saida(t_src)
             if t_out is None:
                 continue
@@ -632,7 +636,9 @@ def _desenhar_quadro(gravador: video_mod.Gravador, matriz: np.ndarray, p: plano.
     nivel = nivel_de_zoom(p, t)
     caixa = janela(img.width, img.height, nivel, edicao.ancora_x, edicao.ancora_y)
     if nivel > 1.0005 or img.size != (largura, altura):
-        img = img.resize((largura, altura), Image.BILINEAR, box=caixa)
+        # aumentando (a gravação pequena com o realce), o bicúbico não deixa a imagem mole
+        filtro = Image.BICUBIC if img.width < largura else Image.BILINEAR
+        img = img.resize((largura, altura), filtro, box=caixa)
     img = _cartoes_no_quadro(img, p.cartoes, t)
     _icones(img, p, t)
     legenda.desenhar(img, p, t)
@@ -752,6 +758,8 @@ def _editar_montagem(montagem: Montagem, destino: Path, edicao: OpcoesDeEdicao,
         camada.fps_do_video = float(fps)
     else:
         camada = camada_da_montagem(montagem, tempo if montagem.pessoa is not None else None)
+        if camada is not None and hasattr(camada, "tratar"):
+            camada.tratar = imagem_mod.tratamento(edicao.imagem)
     falas = janela_mod.falas(f.no_editado)
     deitado = largura > altura * 1.2
     if edicao.janela:

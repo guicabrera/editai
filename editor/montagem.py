@@ -417,6 +417,8 @@ class CamadaRecortada(Camada):
         self._medir(amostras)
         self._origem: np.ndarray | None = None
         self._rgba: np.ndarray | None = None
+        #: O tratamento da imagem (:mod:`editor.imagem`), posto pelo render; ``None``: original.
+        self.tratar = None
 
     def rgba(self, t_origem: float, t_saida: float) -> np.ndarray:
         q = self.cursor.em(t_origem)
@@ -428,6 +430,8 @@ class CamadaRecortada(Camada):
         mascara = Image.fromarray((np.clip(alfa, 0, 1) * 255).astype(np.uint8)).resize(
             (q.shape[1], q.shape[0]), Image.BILINEAR)
         self._origem = q
+        if self.tratar is not None:
+            q = self.tratar(q)
         self._rgba = np.dstack([q, np.asarray(mascara)])
         return self._rgba
 

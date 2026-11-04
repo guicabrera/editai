@@ -59,6 +59,11 @@ class TestAGrafia:
         g = transcricao.grafia_do_texto(fala, "É uma ferramenta de graça para todo mundo.")
         assert textos(g) == "É uma plataforma de graça para todo mundo."
 
+    def test_termo_entre_aspas_cercado_pega_a_grafia_mesmo_sem_parecer(self):
+        fala = ouvidas("segue a dilem para mais dicas como essa")
+        g = transcricao.grafia_do_texto(fala, 'Segue a "The Lamb" para mais dicas como essa.')
+        assert "The Lamb" in textos(g) and "dilem" not in textos(g)
+
     def test_frase_inteira_diferente_e_improviso(self):
         fala = ouvidas("então abre aí o editor e testa com qualquer vídeo que você tiver")
         texto = "Então abre o editor e testa um vídeo seu agora mesmo sem medo algum hoje."

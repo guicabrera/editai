@@ -371,6 +371,9 @@ def ajustar_ao_texto(palavras: list[Palavra], texto: str) -> list[Palavra]:
 PARECIDO_MINIMO = 0.45
 #: E só em trechos curtos: uma frase inteira diferente é improviso, e fica como foi ouvida.
 TRECHO_MAXIMO = 5
+#: O termo entre aspas trocado entre dois trechos que casaram, que pega a grafia do texto
+#: sem ser parecido (em palavras ouvidas e do texto).
+TRECHO_CERCADO = 2
 
 
 def _limpar_texto(texto: str) -> list[str]:
@@ -444,12 +447,21 @@ def grafia_do_texto(palavras: list[Palavra], texto: str) -> list[Palavra]:
     def parecido(a: list[str], b: list[str]) -> bool:
         return SequenceMatcher(None, "".join(a), "".join(b)).ratio() >= PARECIDO_MINIMO
 
-    for tag, i1, i2, j1, j2 in comparacao.get_opcodes():
+    # Um termo entre aspas trocado entre dois trechos que casaram também pega a grafia do
+    # texto, mesmo sem letras parecidas: o nome da marca em inglês numa fala em português
+    # ("Segue a \"The Lamb\" para" ouvido "Segue a Dilem para", em 03/11) não tem como ser
+    # outra coisa. Sem aspas, a palavra trocada é improviso e fica como foi dita.
+    entre_aspas = {" ".join(chaves(termo)) for termo in termos_entre_aspas(texto)}
+    blocos = comparacao.get_opcodes()
+    for n, (tag, i1, i2, j1, j2) in enumerate(blocos):
+        cercado = (0 < n < len(blocos) - 1 and blocos[n - 1][0] == "equal"
+                   and blocos[n + 1][0] == "equal" and max(i2 - i1, j2 - j1) <= TRECHO_CERCADO
+                   and " ".join(esperadas[i1:i2]) in entre_aspas)
         if tag == "equal":
             for d in range(i2 - i1):
                 ligar(de_qual[i1 + d], de_quem[j1 + d])
-        elif tag == "replace" and max(i2 - i1, j2 - j1) <= TRECHO_MAXIMO and parecido(
-                esperadas[i1:i2], ouvidas[j1:j2]):
+        elif tag == "replace" and (cercado or max(i2 - i1, j2 - j1) <= TRECHO_MAXIMO and parecido(
+                esperadas[i1:i2], ouvidas[j1:j2])):
             for i in range(i1, i2):
                 for j in range(j1, j2):
                     ligar(de_qual[i], de_quem[j])

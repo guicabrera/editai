@@ -69,6 +69,8 @@ class OpcoesDeEdicao:
     #: O ruído do fundo (o DeepFilterNet3, :mod:`editor.ruido`): "auto" (mede e decide),
     #: "leve", "forte" ou "nao".
     ruido: str = "auto"
+    #: O tratamento da imagem da gravação: "original" ou "realce" (:mod:`editor.imagem`).
+    imagem: str = "original"
     #: O efeito na voz, como texto: "tom=9,coral=20" (ver :mod:`editor.efeitos_da_voz`).
     #: Vazio, nenhum.
     efeito_da_voz: str = ""
@@ -126,6 +128,9 @@ class OpcoesDeEdicao:
             erros.append(f"estilo de legenda desconhecido: {self.estilo_da_legenda} "
                          f"(use {', '.join(plano.ESTILOS_DA_LEGENDA)})")
 
+        from editor import imagem
+        if self.imagem not in imagem.NIVEIS:
+            erros.append(f"imagem desconhecida: {self.imagem} (use {', '.join(imagem.NIVEIS)})")
         if self.voz not in voz.NIVEIS:
             erros.append(f"voz desconhecida: {self.voz} (use {', '.join(voz.NIVEIS)})")
         from editor import ruido

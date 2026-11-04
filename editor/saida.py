@@ -152,13 +152,15 @@ def _par(x: float) -> int:
     return max(2, round(x / 2) * 2)
 
 
-def tamanho(largura: int, altura: int, resolucao: str, formato: str = "mp4") -> tuple[int, int]:
-    """O tamanho de saída: pelo lado curto, sem aumentar além do original, sempre par."""
+def tamanho(largura: int, altura: int, resolucao: str, formato: str = "mp4",
+            aumentar: bool = False) -> tuple[int, int]:
+    """O tamanho de saída: pelo lado curto, sempre par; só aumenta além do original com
+    ``aumentar`` (o realce da imagem da gravação)."""
     alvo = RESOLUCOES.get(resolucao)
     curto = min(largura, altura)
     if formato == "gif":
         alvo = min(alvo or curto, GIF_LADO_CURTO)
-    if not alvo or alvo >= curto:
+    if not alvo or (alvo >= curto and not (aumentar and formato != "gif")):
         return _par(largura), _par(altura)
     k = alvo / curto
     return _par(largura * k), _par(altura * k)
